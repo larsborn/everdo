@@ -31,12 +31,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     def _add_list_flags(p: argparse.ArgumentParser, *, project: bool = True) -> None:
         if project:
-            p.add_argument(
-                "-p", "--show-project", action="store_true", help=_show_proj_help
-            )
-        p.add_argument(
-            "-c", "--show-created", action="store_true", help=_show_created_help
-        )
+            p.add_argument("-p", "--show-project", action="store_true", help=_show_proj_help)
+        p.add_argument("-c", "--show-created", action="store_true", help=_show_created_help)
+        p.add_argument("--count", action="store_true", help="Print item count instead of the full list")
 
     inbox_p = sub.add_parser("inbox", help="Show unprocessed inbox items")
     _add_list_flags(inbox_p, project=False)
@@ -124,7 +121,12 @@ def main(argv: list[str] | None = None) -> None:
         show_created = getattr(args, "show_created", False)
         show_completed = getattr(args, "show_completed", False)
 
+        count_only = getattr(args, "count", False)
+
         def _print(items: list, title: str) -> None:
+            if count_only:
+                print(len(items))
+                return
             print_items(
                 items,
                 title,
