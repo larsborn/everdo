@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import sqlite3
 import sys
 
 from everdo.db import EverdoDB, default_db_path
@@ -12,13 +13,11 @@ from everdo.formatting import (
     print_project_summary,
     print_tags,
 )
-from everdo.model import TagType
+from everdo.model import ItemType, TagType
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="everdo", description="Read-only CLI for Everdo GTD database"
-    )
+    parser = argparse.ArgumentParser(prog="everdo", description="Read-only CLI for Everdo GTD database")
     parser.add_argument(
         "--db",
         default=None,
@@ -39,18 +38,12 @@ def build_parser() -> argparse.ArgumentParser:
     _add_list_flags(inbox_p, project=False)
 
     next_p = sub.add_parser("next", help="Active next actions")
-    next_p.add_argument(
-        "--project", default=None, help="Filter by project ID prefix or name"
-    )
+    next_p.add_argument("--project", default=None, help="Filter by project ID prefix or name")
     _add_list_flags(next_p)
 
     done_p = sub.add_parser("done", help="Completed tasks")
-    done_p.add_argument(
-        "--project", default=None, help="Filter by project ID prefix or name"
-    )
-    done_p.add_argument(
-        "-n", "--limit", type=int, default=50, help="Max items to show (default: 50)"
-    )
+    done_p.add_argument("--project", default=None, help="Filter by project ID prefix or name")
+    done_p.add_argument("-n", "--limit", type=int, default=50, help="Max items to show (default: 50)")
     _add_list_flags(done_p)
     done_p.add_argument(
         "-d",
@@ -80,9 +73,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_list_flags(notebooks_p, project=False)
 
     notes_p = sub.add_parser("notes", help="Reference notes")
-    notes_p.add_argument(
-        "--notebook", default=None, help="Filter by notebook ID prefix or name"
-    )
+    notes_p.add_argument("--notebook", default=None, help="Filter by notebook ID prefix or name")
     _add_list_flags(notes_p, project=False)
 
     tags_p = sub.add_parser("tags", help="List tags")
@@ -104,9 +95,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> None:
-    sys.stdout.reconfigure(
-        errors="replace"
-    )  # avoid problems with emojis in some terminals
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(errors="replace")  # avoid problems with emojis in some terminals
     parser = build_parser()
     args = parser.parse_args(argv)
 
@@ -114,7 +104,13 @@ def main(argv: list[str] | None = None) -> None:
         parser.print_help()
         sys.exit(1)
 
-    with EverdoDB(args.db) as db:
+    try:
+        db = EverdoDB(args.db)
+    except sqlite3.OperationalError as exc:
+        print(f"Cannot open database at {args.db or default_db_path()}: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    with db:
         proj_names = None
         if getattr(args, "show_project", False):
             proj_names = db.project_titles()
@@ -166,7 +162,9 @@ def main(argv: list[str] | None = None) -> None:
                         print(f"  {m.short_id}  {m.title}", file=sys.stderr)
                     sys.exit(1)
                 project_id = matches[0].id
-            _print(db.done(project_id, args.limit), "Done")
+            # --count must report the true total, not one capped by the display limit
+            limit = None if count_only else args.limit
+            _print(db.done(project_id, limit), "Done")
 
         elif args.command == "projects":
             print_project_summary(db.project_summary())
@@ -175,6 +173,9 @@ def main(argv: list[str] | None = None) -> None:
             proj = db.get_item(args.id)
             if not proj:
                 print(f"Project not found: {args.id}", file=sys.stderr)
+                sys.exit(1)
+            if proj.type != ItemType.PROJECT:
+                print(f"Not a project: {proj.short_id} ({proj.title})", file=sys.stderr)
                 sys.exit(1)
             print_item_detail(proj)
             _print(db.project_tasks(proj.id), "Tasks")
@@ -199,14 +200,10 @@ def main(argv: list[str] | None = None) -> None:
             if args.notebook:
                 matches = db.find_notebooks(args.notebook)
                 if not matches:
-                    print(
-                        f"No notebook found matching: {args.notebook}", file=sys.stderr
-                    )
+                    print(f"No notebook found matching: {args.notebook}", file=sys.stderr)
                     sys.exit(1)
                 if len(matches) > 1:
-                    print(
-                        f"Multiple notebooks match '{args.notebook}':", file=sys.stderr
-                    )
+                    print(f"Multiple notebooks match '{args.notebook}':", file=sys.stderr)
                     for m in matches:
                         print(f"  {m.short_id}  {m.title}", file=sys.stderr)
                     sys.exit(1)

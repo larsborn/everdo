@@ -35,9 +35,7 @@ class TestEnumValues(unittest.TestCase):
 
 class TestItem(unittest.TestCase):
     def test_is_complete_false(self):
-        item = Item(
-            id="aabb", title="t", type=ItemType.ACTION, list_type=ListType.ACTIVE
-        )
+        item = Item(id="aabb", title="t", type=ItemType.ACTION, list_type=ListType.ACTIVE)
         self.assertFalse(item.is_complete)
 
     def test_is_complete_true(self):
@@ -105,9 +103,7 @@ class TestTsToDatetime(unittest.TestCase):
     def test_known_timestamp(self):
         # Everdo stores timestamps as seconds since epoch
         result = _ts_to_datetime(1700000000)
-        self.assertEqual(
-            result, datetime(2023, 11, 14, 22, 13, 20, tzinfo=timezone.utc)
-        )
+        self.assertEqual(result, datetime(2023, 11, 14, 22, 13, 20, tzinfo=timezone.utc))
 
     def test_zero(self):
         result = _ts_to_datetime(0)

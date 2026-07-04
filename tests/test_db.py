@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import sqlite3
 import tempfile
 import unittest
 
@@ -158,6 +159,33 @@ class TestTags(DBTestCase):
         self.assertEqual(tags[0].title, "urgent")
 
 
+class TestDone(DBTestCase):
+    def test_all_done(self):
+        items = self.db.done()
+        self.assertEqual([i.id for i in items], [ACTION_DONE_ID])
+
+    def test_done_by_project(self):
+        items = self.db.done(project_id=PROJECT_ID)
+        self.assertEqual([i.id for i in items], [ACTION_DONE_ID])
+
+    def test_done_by_unknown_project(self):
+        self.assertEqual(self.db.done(project_id="ff" * 16), [])
+
+    def test_done_limit(self):
+        self.assertEqual(self.db.done(limit=0), [])
+
+    def test_done_no_limit(self):
+        items = self.db.done(limit=None)
+        self.assertEqual(len(items), 1)
+
+    def test_done_ambiguous_project_prefix(self):
+        # every fixture item ID starts with "0", so the prefix is ambiguous
+        self.assertEqual(self.db.done(project_id="0"), [])
+
+    def test_done_non_hex_project_id(self):
+        self.assertEqual(self.db.done(project_id="zz" * 16), [])
+
+
 class TestSearch(DBTestCase):
     def test_search_case_insensitive(self):
         items = self.db.search("inbox")
@@ -167,6 +195,50 @@ class TestSearch(DBTestCase):
         items = self.db.search("Focused")
         self.assertEqual(len(items), 1)
         self.assertEqual(items[0].id, ACTION_FOCUSED_ID)
+
+    def test_search_excludes_completed(self):
+        # "Done Task" matches the query but is completed and must not appear
+        self.assertEqual(self.db.search("Done"), [])
+
+
+class TestFindProjects(DBTestCase):
+    def test_by_title_substring(self):
+        items = self.db.find_projects("Project")
+        self.assertEqual([i.id for i in items], [PROJECT_ID])
+
+    def test_by_hex_prefix(self):
+        items = self.db.find_projects(PROJECT_ID[:8])
+        self.assertEqual([i.id for i in items], [PROJECT_ID])
+
+    def test_by_odd_length_hex_prefix(self):
+        items = self.db.find_projects(PROJECT_ID[:3])
+        self.assertEqual([i.id for i in items], [PROJECT_ID])
+
+    def test_hex_miss_falls_back_to_title(self):
+        # valid hex prefix that matches no ID and no title
+        self.assertEqual(self.db.find_projects("deadbeef"), [])
+
+
+class TestFindNotebooks(DBTestCase):
+    def test_by_title_substring(self):
+        items = self.db.find_notebooks("Notebook")
+        self.assertEqual([i.id for i in items], [NOTEBOOK_ID])
+
+    def test_by_hex_prefix(self):
+        items = self.db.find_notebooks(NOTEBOOK_ID[:8])
+        self.assertEqual([i.id for i in items], [NOTEBOOK_ID])
+
+    def test_by_odd_length_hex_prefix(self):
+        items = self.db.find_notebooks(NOTEBOOK_ID[:3])
+        self.assertEqual([i.id for i in items], [NOTEBOOK_ID])
+
+    def test_hex_miss_falls_back_to_title(self):
+        self.assertEqual(self.db.find_notebooks("deadbeef"), [])
+
+
+class TestProjectTitles(DBTestCase):
+    def test_project_titles(self):
+        self.assertEqual(self.db.project_titles(), {PROJECT_ID: "Test Project"})
 
 
 class TestGetItem(DBTestCase):
@@ -183,6 +255,50 @@ class TestGetItem(DBTestCase):
     def test_not_found(self):
         item = self.db.get_item("ff" * 16)
         self.assertIsNone(item)
+
+    def test_full_id_invalid_hex(self):
+        self.assertIsNone(self.db.get_item("zz" * 16))
+
+    def test_odd_length_prefix(self):
+        item = self.db.get_item(PROJECT_ID[:7])
+        self.assertIsNotNone(item)
+        self.assertEqual(item.id, PROJECT_ID)
+
+    def test_non_hex_prefix_returns_none(self):
+        # used to raise ValueError via bytes.fromhex
+        self.assertIsNone(self.db.get_item("not-a-hex-id"))
+
+
+class TestUnknownCodes(DBTestCase):
+    """Rows with type/list/tag codes from a newer Everdo version must be skipped, not crash."""
+
+    def _insert_raw(self, sql, params):
+        conn = sqlite3.connect(str(self._db_path))
+        conn.execute(sql, params)
+        conn.commit()
+        conn.close()
+
+    def _reopen(self):
+        self.db.close()
+        self.db = open_test_db(self._db_path)
+
+    def test_unknown_item_type_is_skipped(self):
+        self._insert_raw(
+            "INSERT INTO item (id, title, type, list, created_on) VALUES (?, ?, ?, ?, ?)",
+            (bytes.fromhex("ee" * 16), "Future Item", "x", "i", 1700000000),
+        )
+        self._reopen()
+        ids = {i.id for i in self.db.inbox()}
+        self.assertNotIn("ee" * 16, ids)
+        self.assertEqual(len(ids), 2)  # the two fixture inbox items still load
+
+    def test_unknown_tag_type_is_skipped(self):
+        self._insert_raw(
+            "INSERT INTO tag (id, type, title, color) VALUES (?, ?, ?, ?)",
+            (bytes.fromhex("dd" * 16), "x", "Future Tag", None),
+        )
+        self._reopen()  # _load_tags runs at connection time and must not raise
+        self.assertEqual(len(self.db.tags()), 3)
 
 
 class TestTagsOnItems(DBTestCase):

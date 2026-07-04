@@ -102,9 +102,7 @@ def print_project_summary(summaries: list[tuple[Item, int, int]]) -> None:
         print("  (none)")
         return
     for proj, open_count, done_count in summaries:
-        print(
-            f"{proj.short_id:<10} {_truncate(proj.title, proj_width):<{proj_width}} {open_count:>5} {done_count:>5}"
-        )
+        print(f"{proj.short_id:<10} {_truncate(proj.title, proj_width):<{proj_width}} {open_count:>5} {done_count:>5}")
 
 
 def print_tags(tags: list[Tag]) -> None:

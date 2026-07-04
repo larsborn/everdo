@@ -13,7 +13,7 @@ I am not affiliated with the Everdo project and this is not _the_ official libra
 - **Notebooks & notes**: browse reference material
 - **Prefix ID lookup**: refer to items by the first few characters of their hex ID
 - **Tag support**: list and filter by areas, contacts, and labels
-- **Full-text search**: case-insensitive search across item titles
+- **Title search**: case-insensitive substring search across item titles (completed items are excluded)
 - **Context manager API**: use `EverdoDB` in a `with` block for clean resource handling
 
 ## Installation
@@ -21,7 +21,7 @@ I am not affiliated with the Everdo project and this is not _the_ official libra
 There is no pip package yet. Clone the repository and set your `PYTHONPATH`:
 
 ```bash
-git clone https://gitihub.com/larsborn/everdo everdo
+git clone https://github.com/larsborn/everdo everdo
 cd everdo
 export PYTHONPATH=src  # or SET under Windows
 ```
@@ -257,17 +257,22 @@ with EverdoDB("/path/to/db") as db:
 | `start_date`   | `datetime \| None` | Scheduled start date               |
 | `parent_id`    | `str \| None`      | Parent project/notebook ID         |
 | `note`         | `str \| None`      | Markdown note body                 |
+| `time`         | `int \| None`      | Time estimate in minutes           |
+| `energy`       | `int \| None`      | Energy level (1=low .. 3=high)     |
+| `schedule`     | `str \| None`      | Recurrence schedule                |
+| `contact_id`   | `str \| None`      | Waiting-for contact ID             |
 | `tags`         | `list[Tag]`        | Attached tags                      |
 
 Computed properties: `short_id` (first 8 hex chars), `is_complete`, `is_recurring`, `has_parent`.
 
 ### Tag dataclass
 
-| Field   | Type      | Description             |
-|---------|-----------|-------------------------|
-| `id`    | `str`     | 32-char hex string      |
-| `title` | `str`     | Tag name                |
-| `type`  | `TagType` | Area, contact, or label |
+| Field   | Type          | Description             |
+|---------|---------------|-------------------------|
+| `id`    | `str`         | 32-char hex string      |
+| `title` | `str`         | Tag name                |
+| `type`  | `TagType`     | Area, contact, or label |
+| `color` | `int \| None` | Display color           |
 
 ## Testing
 

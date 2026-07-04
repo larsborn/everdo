@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import sqlite3
 from collections import defaultdict
 from pathlib import Path
@@ -15,6 +16,11 @@ def default_db_path() -> Path:
     if appdata:
         return Path(appdata) / "Everdo" / "db"
     return Path.home() / "AppData" / "Roaming" / "Everdo" / "db"
+
+
+def _is_hex_prefix(query: str) -> bool:
+    """True if query can be used as a hex ID prefix (any length, unlike bytes.fromhex)."""
+    return bool(re.fullmatch(r"[0-9a-fA-F]+", query))
 
 
 class EverdoDB:
@@ -31,11 +37,15 @@ class EverdoDB:
     def _load_tags(self) -> None:
         cur = self._conn.cursor()
         for row in cur.execute("SELECT id, title, type, color FROM tag"):
+            try:
+                tag_type = TagType(row["type"])
+            except ValueError:
+                continue  # tag type from a newer Everdo version; must not break every command
             tag_id = row["id"].hex()
             self._tags_by_id[tag_id] = Tag(
                 id=tag_id,
                 title=row["title"],
-                type=TagType(row["type"]),
+                type=tag_type,
                 color=row["color"],
             )
         for row in cur.execute("SELECT tag_id, item_id FROM tagitem"):
@@ -99,7 +109,13 @@ class EverdoDB:
         if limit is not None:
             sql += f" LIMIT {limit}"
         cur = self._conn.cursor()
-        return [self._row_to_item(row) for row in cur.execute(sql, params)]
+        items = []
+        for row in cur.execute(sql, params):
+            try:
+                items.append(self._row_to_item(row))
+            except ValueError:
+                continue  # type/list code from a newer Everdo version; must not fail the query
+        return items
 
     def done(self, project_id: str | None = None, limit: int = 50) -> list[Item]:
         if project_id:
@@ -179,12 +195,7 @@ class EverdoDB:
 
     def find_notebooks(self, query: str) -> list[Item]:
         """Find notebooks by hex ID prefix or case-insensitive name substring."""
-        try:
-            bytes.fromhex(query)
-            is_hex = True
-        except ValueError:
-            is_hex = False
-        if is_hex:
+        if _is_hex_prefix(query):
             items = self._query_items(
                 "type = ? AND hex(id) LIKE ?",
                 (ItemType.NOTEBOOK.value, query.upper() + "%"),
@@ -236,7 +247,6 @@ class EverdoDB:
 
     def get_item(self, item_id: str) -> Item | None:
         if len(item_id) < 32:
-            blob_prefix = bytes.fromhex(item_id)
             items = self._query_items(
                 "hex(id) LIKE ?",
                 (item_id.upper() + "%",),
@@ -252,12 +262,7 @@ class EverdoDB:
     def find_projects(self, query: str) -> list[Item]:
         """Find projects by hex ID prefix or case-insensitive name substring."""
         # Try hex ID prefix first
-        try:
-            bytes.fromhex(query)
-            is_hex = True
-        except ValueError:
-            is_hex = False
-        if is_hex:
+        if _is_hex_prefix(query):
             items = self._query_items(
                 "type = ? AND hex(id) LIKE ?",
                 (ItemType.PROJECT.value, query.upper() + "%"),
