@@ -12,6 +12,11 @@ def _terminal_width() -> int:
     return shutil.get_terminal_size(fallback=(80, 24)).columns - 1
 
 
+def _clean(text: str) -> str:
+    """Collapse all whitespace (including newlines) into single spaces for one-line output."""
+    return " ".join(text.split())
+
+
 def _truncate(text: str, width: int) -> str:
     if len(text) <= width:
         return text
@@ -29,7 +34,7 @@ def format_date(dt: datetime | None) -> str:
 def format_tags(tags: list[Tag]) -> str:
     if not tags:
         return ""
-    return " ".join(f"@{t.title}" for t in tags)
+    return " ".join(f"@{_clean(t.title)}" for t in tags)
 
 
 def format_energy(energy: int | None) -> str:
@@ -64,45 +69,128 @@ def print_items(
         print("  (none)")
         return
     width = _terminal_width()
-    # prefix: "  " + 8-char id + " " + focus + " " = 14 chars
-    # reserve space for tags/due suffix (approx 30 chars)
-    title_width = max(20, width - 44)
+    rows = []
     for item in items:
-        focused = "*" if item.is_focused else " "
-        tags = format_tags(item.tags)
-        due = format_date(item.due_date)
-        parts = [f"  {item.short_id} {focused} {_truncate(item.title, title_width)}"]
+        project = ""
         if project_names and item.parent_id:
-            proj_name = project_names.get(item.parent_id)
-            if proj_name:
-                parts.append(f"[{proj_name}]")
-        if tags:
-            parts.append(tags)
-        if due:
-            parts.append(f"due:{due}")
-        if show_created:
-            created = format_date(item.created_on)
-            if created:
-                parts.append(f"created:{created}")
-        if show_completed:
-            completed = format_date(item.completed_on)
-            if completed:
-                parts.append(f"done:{completed}")
-        print("  ".join(parts))
+            project = _clean(project_names.get(item.parent_id, ""))
+        rows.append(
+            (
+                item.short_id,
+                "*" if item.is_focused else "",
+                _clean(item.title),
+                project,
+                format_tags(item.tags),
+                format_date(item.due_date),
+                format_date(item.created_on) if show_created else "",
+                format_date(item.completed_on) if show_completed else "",
+            )
+        )
+    # optional columns appear only when at least one row has content for them;
+    # Project sits in front of Title, the rest trail behind it
+    has_project = any(row[3] for row in rows)
+    proj_w = max(len("Project"), max(len(row[3]) for row in rows)) if has_project else 0
+    tail = [
+        (header, idx)
+        for header, idx in [("Tags", 4), ("Due", 5), ("Created", 6), ("Done", 7)]
+        if any(row[idx] for row in rows)
+    ]
+    tail_widths = [max(len(header), max(len(row[idx]) for row in rows)) for header, idx in tail]
+    # columns: ID (8) + focus mark (1) + [Project] + Title (leftover) + tail, single-space separated
+    fixed = 8 + 1 + 1 + 1 + (proj_w + 1 if has_project else 0) + sum(w + 1 for w in tail_widths)
+    title_w = max(20, width - fixed)
+    header_line = f"{'ID':<8} {'':<1}"
+    if has_project:
+        header_line += f" {'Project':<{proj_w}}"
+    header_line += f" {'Title':<{title_w}}"
+    for (header, _), w in zip(tail, tail_widths):
+        header_line += f" {header:<{w}}"
+    print(header_line.rstrip())
+    print("-" * (fixed + title_w))
+    for row in rows:
+        line = f"{row[0]:<8} {row[1]:<1}"
+        if has_project:
+            line += f" {row[3]:<{proj_w}}"
+        line += f" {_truncate(row[2], title_w):<{title_w}}"
+        for (_, idx), w in zip(tail, tail_widths):
+            line += f" {row[idx]:<{w}}"
+        print(line.rstrip())
+
+
+def dedupe_titles(
+    items: list[Item],
+    project_names: dict[str, str] | None = None,
+) -> list[tuple[str, bool, list[str]]]:
+    """Unique item titles (case-insensitive, whitespace-trimmed), alphabetized.
+
+    Returns (title, done, source project names) triples; duplicates merged across
+    projects aggregate all their sources. `done` is True only when every merged
+    occurrence is completed — one open instance means the task is still pending.
+    Keeps the first-seen spelling of each title, so pass items in preference
+    order. Sources stay empty without project_names.
+    """
+    seen: dict[str, str] = {}
+    done: dict[str, bool] = {}
+    sources: dict[str, list[str]] = {}
+    for item in items:
+        title = _clean(item.title)
+        key = title.lower()
+        seen.setdefault(key, title)
+        done[key] = done.get(key, True) and item.is_complete
+        srcs = sources.setdefault(key, [])
+        if project_names and item.parent_id:
+            name = project_names.get(item.parent_id)
+            if name:
+                name = _clean(name)
+                if name not in srcs:
+                    srcs.append(name)
+    return [(seen[key], done[key], sources[key]) for key in sorted(seen)]
+
+
+def print_titles(items: list[Item], project_names: dict[str, str] | None = None) -> None:
+    """Deduplicated titles — no IDs.
+
+    Without project_names: bare untruncated titles, one per line, pipe-friendly.
+    With project_names: an aligned table in the same style as the projects
+    summary, with done-status and source-project columns.
+    """
+    rows = dedupe_titles(items, project_names)
+    if project_names is None:
+        for title, _, _ in rows:
+            print(title)
+        return
+    width = _terminal_width()
+    proj_cells = [", ".join(projects) for _, _, projects in rows]
+    proj_w = max([len("Project(s)")] + [len(p) for p in proj_cells])
+    # columns: done mark (2, no header — the checkmark speaks for itself)
+    # + Task (leftover) + Project(s), single-space separated
+    mark_w = 2
+    task_w = max(20, width - mark_w - proj_w - 2)
+    print(f"\n{'':<{mark_w}} {'Task':<{task_w}} Project(s)")
+    print("-" * (mark_w + 1 + task_w + 1 + proj_w))
+    if not rows:
+        print("  (none)")
+        return
+    for (title, is_done, _), projects in zip(rows, proj_cells):
+        mark = "✓" if is_done else ""
+        print(f"{mark:<{mark_w}} {_truncate(title, task_w):<{task_w}} {projects}")
 
 
 def print_project_summary(summaries: list[tuple[Item, int, int]]) -> None:
     width = _terminal_width()
-    # columns: ID (10) + 3 spaces + Open (5) + Done (5) = 23 fixed
-    proj_width = max(20, width - 23)
-    line_width = proj_width + 23
-    print(f"\n{'ID':<10} {'Project':<{proj_width}} {'Open':>5} {'Done':>5}")
+    # columns: ID (10) + Created (10) + Open (5) + Done (5) + 4 separators = 34 fixed
+    proj_width = max(20, width - 34)
+    line_width = proj_width + 34
+    print(f"\n{'ID':<10} {'Project':<{proj_width}} {'Created':<10} {'Open':>5} {'Done':>5}")
     print("-" * line_width)
     if not summaries:
         print("  (none)")
         return
     for proj, open_count, done_count in summaries:
-        print(f"{proj.short_id:<10} {_truncate(proj.title, proj_width):<{proj_width}} {open_count:>5} {done_count:>5}")
+        print(
+            f"{proj.short_id:<10} {_truncate(_clean(proj.title), proj_width):<{proj_width}} "
+            f"{format_date(proj.created_on):<10} {open_count:>5} {done_count:>5}"
+        )
 
 
 def print_tags(tags: list[Tag]) -> None:
@@ -119,7 +207,7 @@ def print_tags(tags: list[Tag]) -> None:
 
 
 def print_item_detail(item: Item) -> None:
-    print(f"\n{'Title:':<12} {item.title}")
+    print(f"\n{'Title:':<12} {_clean(item.title)}")
     print(f"{'ID:':<12} {item.id}")
     print(f"{'Type:':<12} {item.type.name}")
     print(f"{'List:':<12} {item.list_type.name}")

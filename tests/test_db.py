@@ -4,11 +4,14 @@ import sqlite3
 import tempfile
 import unittest
 
-from everdo.model import TagType
+from everdo.model import ListType, TagType
 from tests.conftest import (
     ACTION_ACTIVE_ID,
     ACTION_DONE_ID,
     ACTION_FOCUSED_ID,
+    ARCHIVED_PROJECT_ID,
+    ARCHIVED_TASK_1_ID,
+    ARCHIVED_TASK_2_ID,
     INBOX_1_ID,
     NOTE_1_ID,
     NOTE_2_ID,
@@ -51,6 +54,22 @@ class TestProjects(DBTestCase):
         self.assertEqual(len(projects), 1)
         self.assertEqual(projects[0].title, "Test Project")
         self.assertEqual(projects[0].id, PROJECT_ID)
+
+    def test_all_projects(self):
+        projects = self.db.all_projects()
+        self.assertEqual(
+            [p.id for p in projects],
+            [ARCHIVED_PROJECT_ID, PROJECT_ID],  # "Old Trip 2024" sorts before "Test Project"
+        )
+
+    def test_all_projects_filtered_archived(self):
+        projects = self.db.all_projects(ListType.ARCHIVED)
+        self.assertEqual([p.id for p in projects], [ARCHIVED_PROJECT_ID])
+        self.assertTrue(projects[0].is_complete)
+
+    def test_all_projects_filtered_active(self):
+        projects = self.db.all_projects(ListType.ACTIVE)
+        self.assertEqual([p.id for p in projects], [PROJECT_ID])
 
 
 class TestNextActions(DBTestCase):
@@ -127,6 +146,11 @@ class TestProjectTasks(DBTestCase):
         self.assertIn(ACTION_FOCUSED_ID, ids)
         self.assertIn(ACTION_ACTIVE_ID, ids)
 
+    def test_project_tasks_of_archived_project(self):
+        tasks = self.db.project_tasks(ARCHIVED_PROJECT_ID)
+        ids = {t.id for t in tasks}
+        self.assertEqual(ids, {ARCHIVED_TASK_1_ID, ARCHIVED_TASK_2_ID})
+
 
 class TestProjectSummary(DBTestCase):
     def test_project_summary(self):
@@ -160,9 +184,12 @@ class TestTags(DBTestCase):
 
 
 class TestDone(DBTestCase):
-    def test_all_done(self):
+    def test_all_done_newest_completion_first(self):
         items = self.db.done()
-        self.assertEqual([i.id for i in items], [ACTION_DONE_ID])
+        self.assertEqual(
+            [i.id for i in items],
+            [ARCHIVED_TASK_2_ID, ARCHIVED_TASK_1_ID, ACTION_DONE_ID],
+        )
 
     def test_done_by_project(self):
         items = self.db.done(project_id=PROJECT_ID)
@@ -176,7 +203,7 @@ class TestDone(DBTestCase):
 
     def test_done_no_limit(self):
         items = self.db.done(limit=None)
-        self.assertEqual(len(items), 1)
+        self.assertEqual(len(items), 3)
 
     def test_done_ambiguous_project_prefix(self):
         # every fixture item ID starts with "0", so the prefix is ambiguous
@@ -199,6 +226,10 @@ class TestSearch(DBTestCase):
     def test_search_excludes_completed(self):
         # "Done Task" matches the query but is completed and must not appear
         self.assertEqual(self.db.search("Done"), [])
+
+    def test_search_include_done(self):
+        items = self.db.search("Done", include_done=True)
+        self.assertEqual([i.id for i in items], [ACTION_DONE_ID])
 
 
 class TestFindProjects(DBTestCase):
@@ -238,7 +269,10 @@ class TestFindNotebooks(DBTestCase):
 
 class TestProjectTitles(DBTestCase):
     def test_project_titles(self):
-        self.assertEqual(self.db.project_titles(), {PROJECT_ID: "Test Project"})
+        self.assertEqual(
+            self.db.project_titles(),
+            {PROJECT_ID: "Test Project", ARCHIVED_PROJECT_ID: "Old Trip 2024"},
+        )
 
 
 class TestGetItem(DBTestCase):

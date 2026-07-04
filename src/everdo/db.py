@@ -148,6 +148,15 @@ class EverdoDB:
             order_by="title ASC",
         )
 
+    def all_projects(self, list_type: ListType | None = None) -> list[Item]:
+        """All projects regardless of completion, optionally filtered to one list."""
+        where = "type = ?"
+        params: tuple = (ItemType.PROJECT.value,)
+        if list_type is not None:
+            where += " AND list = ?"
+            params += (list_type.value,)
+        return self._query_items(where, params, order_by="title ASC")
+
     def next_actions(self, project_id: str | None = None) -> list[Item]:
         if project_id:
             blob = self._resolve_id(project_id)
@@ -239,11 +248,11 @@ class EverdoDB:
             return [t for t in all_tags if t.type == tag_type]
         return all_tags
 
-    def search(self, query: str) -> list[Item]:
-        return self._query_items(
-            "title LIKE ? AND completed_on IS NULL",
-            (f"%{query}%",),
-        )
+    def search(self, query: str, include_done: bool = False) -> list[Item]:
+        where = "title LIKE ?"
+        if not include_done:
+            where += " AND completed_on IS NULL"
+        return self._query_items(where, (f"%{query}%",))
 
     def get_item(self, item_id: str) -> Item | None:
         if len(item_id) < 32:
@@ -284,8 +293,9 @@ class EverdoDB:
         ).fetchall()
         return {row["id"].hex(): row["title"] for row in rows}
 
-    def project_summary(self) -> list[tuple[Item, int, int]]:
-        projects = self.active_projects()
+    def project_summary(self, projects: list[Item] | None = None) -> list[tuple[Item, int, int]]:
+        if projects is None:
+            projects = self.active_projects()
         result = []
         for proj in projects:
             blob = bytes.fromhex(proj.id)

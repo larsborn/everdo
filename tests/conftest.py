@@ -16,6 +16,9 @@ TAG_CONTACT_ID = "bb" * 16
 TAG_LABEL_ID = "cc" * 16
 
 PROJECT_ID = "01" * 16
+ARCHIVED_PROJECT_ID = "0d" * 16
+ARCHIVED_TASK_1_ID = "0e" * 16
+ARCHIVED_TASK_2_ID = "0f" * 16
 ACTION_DONE_ID = "02" * 16
 ACTION_FOCUSED_ID = "03" * 16
 ACTION_ACTIVE_ID = "04" * 16
@@ -154,6 +157,34 @@ def _populate(conn: sqlite3.Connection) -> None:
         )
 
     _ins(PROJECT_ID, "Test Project", "p", "a", energy=2, pos_child=0)
+    # archived project created earlier than the active one, with completed child tasks
+    # (one duplicate title pair for dedupe tests)
+    _ins(
+        ARCHIVED_PROJECT_ID,
+        "Old Trip 2024",
+        "p",
+        "r",
+        created=TS_BASE - 1000,
+        completed=TS_BASE + 10,
+    )
+    _ins(
+        ARCHIVED_TASK_1_ID,
+        "Pack Tent",
+        "a",
+        "r",
+        completed=TS_BASE + 20,
+        parent=ARCHIVED_PROJECT_ID,
+        pos_child=0,
+    )
+    _ins(
+        ARCHIVED_TASK_2_ID,
+        "pack tent",
+        "a",
+        "r",
+        completed=TS_BASE + 30,
+        parent=ARCHIVED_PROJECT_ID,
+        pos_child=1,
+    )
     _ins(
         ACTION_DONE_ID,
         "Done Task",

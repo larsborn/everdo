@@ -10,10 +10,12 @@ I am not affiliated with the Everdo project and this is not _the_ official libra
 - **Read-only & safe**: opens the database in SQLite read-only mode; your data is never modified
 - **GTD views**: inbox, next actions, projects, waiting, scheduled, someday/maybe, focused
 - **Project drill-down**: view a project's detail and its open/completed tasks
+- **Cross-project task lists**: merge the tasks of several projects (archived ones included), with optional dedup
 - **Notebooks & notes**: browse reference material
 - **Prefix ID lookup**: refer to items by the first few characters of their hex ID
 - **Tag support**: list and filter by areas, contacts, and labels
-- **Title search**: case-insensitive substring search across item titles (completed items are excluded)
+- **Title search**: case-insensitive substring search across item titles; multiple OR-combined terms, optionally including completed/archived items (`-a`)
+- **Checklist compilation**: `search -a -t` prints deduplicated bare titles from current and past tasks — ideal for rebuilding recurring todo lists (e.g. a yearly trip) from what you did last time
 - **Context manager API**: use `EverdoDB` in a `with` block for clean resource handling
 
 ## Installation
@@ -36,8 +38,8 @@ python -m everdo <command>
 
 ```
 usage: everdo [-h] [--db DB]
-              {inbox,next,done,projects,project,waiting,scheduled,someday,
-               focused,notebooks,notes,tags,show,search} ...
+              {inbox,next,done,projects,project,tasks,waiting,scheduled,
+               someday,focused,notebooks,notes,tags,show,search} ...
 
 Read-only CLI for Everdo GTD database
 
@@ -48,6 +50,7 @@ positional arguments:
     done                Completed tasks
     projects            List active projects with task counts
     project             Show project detail and its tasks
+    tasks               List all tasks (open and completed) of one or more projects
     waiting             Items waiting for someone
     scheduled           Scheduled items
     someday             Someday/Maybe items
@@ -70,9 +73,11 @@ $ python -m everdo inbox
 
 Inbox
 -----
-  a1b2c3d4    Buy groceries for the week
-  e5f6a7b8    Read article on time management
-  19d0c3e2    Schedule dentist appointment
+ID         Title
+------------------------------------------
+a1b2c3d4   Buy groceries for the week
+e5f6a7b8   Read article on time management
+19d0c3e2   Schedule dentist appointment
 ```
 
 ### Projects
@@ -80,12 +85,52 @@ Inbox
 ```
 $ python -m everdo projects
 
-ID         Project                                        Open  Done
--------------------------------------------------------------------
-3f8a1b2c   Home renovation                                  12     5
-7d4e9f01   Q1 planning                                       3     8
-b2c5d8e3   Learn Spanish                                     6     2
+ID         Project                             Created     Open  Done
+----------------------------------------------------------------------
+7d4e9f01   Q1 planning                         2026-01-05     3     8
+3f8a1b2c   Home renovation                     2025-02-11    12     5
+b2c5d8e3   Learn Spanish                       2024-08-30     6     2
 ```
+
+Output is sorted by creation date, newest first. `--sort {created,title,open,done}` selects
+another column (`title` sorts ascending, the rest descending) and `--reverse` flips the order:
+
+```
+$ python -m everdo projects --sort title
+$ python -m everdo projects --sort open --reverse
+```
+
+By default only open, active projects are shown. Use `--list` to see other lists — including
+completed projects — e.g. archived ones, or `all` for every project:
+
+```
+$ python -m everdo projects --list archived
+$ python -m everdo projects --list all
+```
+
+(Choices: `all`, `inbox`, `active`, `scheduled`, `waiting`, `someday`, `deleted`, `archived`.)
+
+`--filter` narrows the result to projects whose title contains a substring (case-insensitive),
+which pairs well with `--list all` to find past years' projects:
+
+```
+$ python -m everdo projects --list all --filter Packliste
+```
+
+### Tasks across projects
+
+`tasks` lists every task — open and completed — of one or more projects, archived projects
+included. Each argument is an ID prefix or name substring, and *every* matching project is
+included, so a single query like `Trip` can cover all years at once:
+
+```
+$ python -m everdo tasks "Trip 2024" "Trip 2025"
+$ python -m everdo tasks Trip -t -p
+```
+
+The `-t`/`-p` flags work exactly like in `search`: `-t` prints deduplicated bare titles, and
+`-t -p` renders the checkmark table — the quickest way to turn past years' project task lists
+into a fresh checklist.
 
 ### Next Actions
 
@@ -94,29 +139,25 @@ $ python -m everdo next
 
 Next Actions
 ------------
-  3f8a1b2c    Pick paint colors                @home
-  7d4e9f01 *  Draft budget proposal             @work  due:2026-03-20
-  b2c5d8e3    Practice vocabulary flashcards    @learning
+ID         Title                           Tags       Due
+------------------------------------------------------------
+3f8a1b2c   Pick paint colors               @home
+7d4e9f01 * Draft budget proposal           @work      2026-03-20
+b2c5d8e3   Practice vocabulary flashcards  @learning
 ```
 
 Filter by project (ID prefix or name):
 
 ```
 $ python -m everdo next --project 3f8a
-
-Next Actions
-------------
-  3f8a1b2c    Pick paint colors    @home
-  3f8a9c01    Measure living room  @home
-```
-
-```
 $ python -m everdo next --project renovation
 
 Next Actions
 ------------
-  3f8a1b2c    Pick paint colors    @home
-  3f8a9c01    Measure living room  @home
+ID         Title                Tags
+---------------------------------------
+3f8a1b2c   Pick paint colors    @home
+3f8a9c01   Measure living room  @home
 ```
 
 ### Show Item Detail
@@ -142,8 +183,50 @@ $ python -m everdo search budget
 
 Search: budget
 --------------
-  7d4e9f01 *  Draft budget proposal    @work  due:2026-03-20
+ID         Title                     Tags   Due
+--------------------------------------------------
+7d4e9f01 * Draft budget proposal     @work  2026-03-20
+c4d5e6f7   Review department budget  @work
+```
+
+Multiple terms are OR-combined, and `-a/--all` includes completed and archived tasks:
+
+```
+$ python -m everdo search -a budget expenses
+
+Search: budget, expenses
+------------------------
+  7d4e9f01 *  Draft budget proposal     @work  due:2026-03-20
   c4d5e6f7    Review department budget  @work
+  91b0e4a2    Submit expenses Q3        @work
+```
+
+### Compiling a checklist from past tasks
+
+To rebuild a recurring todo list (e.g. a yearly trip) from everything you did before, search across
+all items — including completed ones — and print deduplicated bare titles with `-t/--titles`:
+
+```
+$ python -m everdo search -a -t packing sunscreen tent visa > trip-checklist.txt
+```
+
+Titles are deduplicated case-insensitively and alphabetized, one per line, without IDs or
+truncation, so the output is easy to edit and to re-enter in Everdo manually (this tool stays
+read-only by design).
+
+Add `-p` to see which project(s) each task came from — the output becomes an aligned table, and
+duplicates merged across years list all their sources, which highlights the tasks that recur every
+trip. A leading checkmark means no open instance of that task exists (every match is completed);
+no checkmark means an open task with that title is already on one of your lists:
+
+```
+$ python -m everdo search -a -t -p packing tent visa
+
+   Task                 Project(s)
+--------------------------------------------
+✓  Book campsite        Trip 2025
+   Pack tent            Trip 2024, Trip 2025
+✓  Renew visa           Trip 2024, Trip 2025
 ```
 
 ### Tags
@@ -164,9 +247,11 @@ $ python -m everdo done -n 5
 
 Done
 ----
-  3f8a1b2c    Sand kitchen cabinets    @home
-  7d4e9f01    Submit expense report    @work
-  b2c5d8e3    Review chapter 3         @learning
+ID         Title                  Tags
+------------------------------------------
+3f8a1b2c   Sand kitchen cabinets  @home
+7d4e9f01   Submit expense report  @work
+b2c5d8e3   Review chapter 3       @learning
 ```
 
 Filter by project and/or limit results:

@@ -12,8 +12,9 @@ from everdo.formatting import (
     print_items,
     print_project_summary,
     print_tags,
+    print_titles,
 )
-from everdo.model import ItemType, TagType
+from everdo.model import ItemType, ListType, TagType
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -52,10 +53,51 @@ def build_parser() -> argparse.ArgumentParser:
         help="Show completion date for each item",
     )
 
-    sub.add_parser("projects", help="List active projects with task counts")
+    projects_p = sub.add_parser("projects", help="List active projects with task counts")
+    projects_p.add_argument(
+        "--list",
+        dest="list_filter",
+        choices=["all", "inbox", "active", "scheduled", "waiting", "someday", "deleted", "archived"],
+        default=None,
+        help="Show projects from this list instead of only open active ones "
+        "('all' for every list); includes completed projects",
+    )
+    projects_p.add_argument(
+        "--filter",
+        dest="title_filter",
+        default=None,
+        help="Only show projects whose title contains this substring (case-insensitive)",
+    )
+    projects_p.add_argument(
+        "--sort",
+        choices=["created", "title", "open", "done"],
+        default="created",
+        help="Sort column; created/open/done sort descending, title ascending (default: created)",
+    )
+    projects_p.add_argument("--reverse", action="store_true", help="Reverse the sort order")
 
     proj_p = sub.add_parser("project", help="Show project detail and its tasks")
     proj_p.add_argument("id", help="Project hex ID (or prefix)")
+
+    tasks_p = sub.add_parser("tasks", help="List all tasks (open and completed) of one or more projects")
+    tasks_p.add_argument(
+        "project",
+        nargs="+",
+        help="Project ID prefix or name; every matching project is included",
+    )
+    tasks_p.add_argument(
+        "-t",
+        "--titles",
+        action="store_true",
+        help="Print deduplicated bare titles only, for compiling checklists",
+    )
+    tasks_p.add_argument(
+        "-d",
+        "--show-completed",
+        action="store_true",
+        help="Show completion date for each item",
+    )
+    _add_list_flags(tasks_p)
 
     waiting_p = sub.add_parser("waiting", help="Items waiting for someone")
     _add_list_flags(waiting_p)
@@ -88,7 +130,23 @@ def build_parser() -> argparse.ArgumentParser:
     show_p.add_argument("id", help="Item hex ID (or prefix)")
 
     search_p = sub.add_parser("search", help="Search item titles")
-    search_p.add_argument("query", help="Search string (case-insensitive)")
+    search_p.add_argument(
+        "query",
+        nargs="+",
+        help="One or more search strings (case-insensitive, OR-combined)",
+    )
+    search_p.add_argument(
+        "-a",
+        "--all",
+        action="store_true",
+        help="Include completed items (done and archived tasks)",
+    )
+    search_p.add_argument(
+        "-t",
+        "--titles",
+        action="store_true",
+        help="Print deduplicated bare titles only, for compiling checklists",
+    )
     _add_list_flags(search_p)
 
     return parser
@@ -167,7 +225,24 @@ def main(argv: list[str] | None = None) -> None:
             _print(db.done(project_id, limit), "Done")
 
         elif args.command == "projects":
-            print_project_summary(db.project_summary())
+            if args.list_filter:
+                list_type = None if args.list_filter == "all" else ListType[args.list_filter.upper()]
+                projects = db.all_projects(list_type)
+            else:
+                projects = db.active_projects()
+            if args.title_filter:
+                needle = args.title_filter.lower()
+                projects = [p for p in projects if needle in p.title.lower()]
+            summaries = db.project_summary(projects)
+            sort_keys = {
+                "created": lambda s: s[0].created_on.timestamp() if s[0].created_on else 0,
+                "title": lambda s: s[0].title.lower(),
+                "open": lambda s: s[1],
+                "done": lambda s: s[2],
+            }
+            descending = args.sort != "title"
+            summaries.sort(key=sort_keys[args.sort], reverse=descending != args.reverse)
+            print_project_summary(summaries)
 
         elif args.command == "project":
             proj = db.get_item(args.id)
@@ -179,6 +254,27 @@ def main(argv: list[str] | None = None) -> None:
                 sys.exit(1)
             print_item_detail(proj)
             _print(db.project_tasks(proj.id), "Tasks")
+
+        elif args.command == "tasks":
+            projects_by_id = {}
+            for query in args.project:
+                matches = db.find_projects(query)
+                if not matches:
+                    print(f"No project found matching: {query}", file=sys.stderr)
+                    sys.exit(1)
+                for match in matches:
+                    projects_by_id.setdefault(match.id, match)
+            items = []
+            seen_ids = set()
+            for proj in projects_by_id.values():
+                for item in db.project_tasks(proj.id):
+                    if item.id not in seen_ids:
+                        seen_ids.add(item.id)
+                        items.append(item)
+            if args.titles:
+                print_titles(items, proj_names)
+            else:
+                _print(items, "Tasks")
 
         elif args.command == "waiting":
             _print(db.waiting(), "Waiting")
@@ -224,7 +320,19 @@ def main(argv: list[str] | None = None) -> None:
             print_item_detail(item)
 
         elif args.command == "search":
-            _print(db.search(args.query), f"Search: {args.query}")
+            by_id = {}
+            for query in args.query:
+                for item in db.search(query, include_done=args.all):
+                    by_id.setdefault(item.id, item)
+            items = sorted(
+                by_id.values(),
+                key=lambda i: i.created_on.timestamp() if i.created_on else 0,
+                reverse=True,
+            )
+            if args.titles:
+                print_titles(items, proj_names)
+            else:
+                _print(items, f"Search: {', '.join(args.query)}")
 
 
 if __name__ == "__main__":
