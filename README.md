@@ -33,7 +33,7 @@ export PYTHONPATH=src  # or SET under Windows
 Then run with:
 
 ```bash
-python3 -m everdo <command>
+python -m everdo <command>
 ```
 
 ## CLI Usage
@@ -72,7 +72,7 @@ options:
 ### Inbox
 
 ```
-$ python3 -m everdo inbox
+$ python -m everdo inbox
 
 Inbox
 -----
@@ -86,7 +86,7 @@ e5f6a7b8   Read article on time management
 ### Projects
 
 ```
-$ python3 -m everdo projects
+$ python -m everdo projects
 
 ID         Project                             Created     Open  Done
 ----------------------------------------------------------------------
@@ -99,16 +99,16 @@ Output is sorted by creation date, newest first. `--sort {created,title,open,don
 another column (`title` sorts ascending, the rest descending) and `--reverse` flips the order:
 
 ```
-$ python3 -m everdo projects --sort title
-$ python3 -m everdo projects --sort open --reverse
+$ python -m everdo projects --sort title
+$ python -m everdo projects --sort open --reverse
 ```
 
 By default only open, active projects are shown. Use `--list` to see other lists — including
 completed projects — e.g. archived ones, or `all` for every project:
 
 ```
-$ python3 -m everdo projects --list archived
-$ python3 -m everdo projects --list all
+$ python -m everdo projects --list archived
+$ python -m everdo projects --list all
 ```
 
 (Choices: `all`, `inbox`, `active`, `scheduled`, `waiting`, `someday`, `deleted`, `archived`.)
@@ -117,7 +117,7 @@ $ python3 -m everdo projects --list all
 which pairs well with `--list all` to find past years' projects:
 
 ```
-$ python3 -m everdo projects --list all --filter Packliste
+$ python -m everdo projects --list all --filter Packliste
 ```
 
 ### Tasks across projects
@@ -127,8 +127,8 @@ included. Each argument is an ID prefix or name substring, and *every* matching 
 included, so a single query like `Trip` can cover all years at once:
 
 ```
-$ python3 -m everdo tasks "Trip 2024" "Trip 2025"
-$ python3 -m everdo tasks Trip -t -p
+$ python -m everdo tasks "Trip 2024" "Trip 2025"
+$ python -m everdo tasks Trip -t -p
 ```
 
 The `-t`/`-p` flags work exactly like in `search`: `-t` prints deduplicated bare titles, and
@@ -138,7 +138,7 @@ into a fresh checklist.
 ### Next Actions
 
 ```
-$ python3 -m everdo next
+$ python -m everdo next
 
 Next Actions
 ------------
@@ -152,8 +152,8 @@ b2c5d8e3   Practice vocabulary flashcards  @learning
 Filter by project (ID prefix or name):
 
 ```
-$ python3 -m everdo next --project 3f8a
-$ python3 -m everdo next --project renovation
+$ python -m everdo next --project 3f8a
+$ python -m everdo next --project renovation
 
 Next Actions
 ------------
@@ -166,7 +166,7 @@ ID         Title                Tags
 ### Show Item Detail
 
 ```
-$ python3 -m everdo show 7d4e
+$ python -m everdo show 7d4e
 
 Title:       Draft budget proposal
 ID:          7d4e9f01a2b3c4d5e6f7a8b9c0d1e2f3
@@ -182,7 +182,7 @@ Tags:        @work @planning
 ### Search
 
 ```
-$ python3 -m everdo search budget
+$ python -m everdo search budget
 
 Search: budget
 --------------
@@ -195,7 +195,7 @@ c4d5e6f7   Review department budget  @work
 Multiple terms are OR-combined, and `-a/--all` includes completed and archived tasks:
 
 ```
-$ python3 -m everdo search -a budget expenses
+$ python -m everdo search -a budget expenses
 
 Search: budget, expenses
 ------------------------
@@ -210,7 +210,7 @@ To rebuild a recurring todo list (e.g. a yearly trip) from everything you did be
 all items — including completed ones — and print deduplicated bare titles with `-t/--titles`:
 
 ```
-$ python3 -m everdo search -a -t packing sunscreen tent visa > trip-checklist.txt
+$ python -m everdo search -a -t packing sunscreen tent visa > trip-checklist.txt
 ```
 
 Titles are deduplicated case-insensitively and alphabetized, one per line, without IDs or
@@ -223,7 +223,7 @@ trip. A leading checkmark means no open instance of that task exists (every matc
 no checkmark means an open task with that title is already on one of your lists:
 
 ```
-$ python3 -m everdo search -a -t -p packing tent visa
+$ python -m everdo search -a -t -p packing tent visa
 
    Task                 Project(s)
 --------------------------------------------
@@ -235,7 +235,7 @@ $ python3 -m everdo search -a -t -p packing tent visa
 ### Tags
 
 ```
-$ python3 -m everdo tags --type area
+$ python -m everdo tags --type area
 
 Areas
 --------------------
@@ -246,7 +246,7 @@ Areas
 ### Done
 
 ```
-$ python3 -m everdo done -n 5
+$ python -m everdo done -n 5
 
 Done
 ----
@@ -260,7 +260,7 @@ b2c5d8e3   Review chapter 3       @learning
 Filter by project and/or limit results:
 
 ```
-$ python3 -m everdo done --project renovation -n 10
+$ python -m everdo done --project renovation -n 10
 ```
 
 ### Other Commands
@@ -281,9 +281,9 @@ Enable the API in Everdo under **Settings -> API**, apply the settings, then res
 `EVERDO_API_URL` is optional and defaults to `https://localhost:11111`.
 
 ```bash
-python3 -m everdo inbox-add "Call the dentist"
-python3 -m everdo inbox-add "Plan weekend trip" --note "Check trains and hotels"
-python3 -m everdo inbox-add "Review proposal" --focused
+python -m everdo inbox-add "Call the dentist"
+python -m everdo inbox-add "Plan weekend trip" --note "Check trains and hotels"
+python -m everdo inbox-add "Review proposal" --focused
 ```
 
 To keep both settings in the environment instead of passing flags each time — the example shows the default URL —
@@ -292,7 +292,7 @@ export them once for your shell session:
 ```bash
 export EVERDO_API_URL=https://localhost:11111
 export EVERDO_API_KEY=your-api-key
-python3 -m everdo inbox-add "Capture meeting follow-up" --note "Send the recap" --focused
+python -m everdo inbox-add "Capture meeting follow-up" --note "Send the recap" --focused
 ```
 
 The command accepts a required title and these optional flags:
@@ -315,7 +315,7 @@ trusted local network. On success, the command prints the created item ID and it
 Use `--db PATH` to point at a different database file:
 
 ```bash
-python3 -m everdo --db /path/to/other/db inbox
+python -m everdo --db /path/to/other/db inbox
 ```
 
 ## Python Library Usage
