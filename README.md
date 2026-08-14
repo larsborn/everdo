@@ -1,15 +1,15 @@
 # Everdo Library / Command Line Interface
 
 A zero-dependency Python interface to the [Everdo](https://everdo.net/) GTD database: run read-only local queries,
-or create inbox items through Everdo's API. Query your actions, projects, and tags from the command line or from
-Python.
+or create inbox items through Everdo's documented HTTP API. Query your actions, projects, and tags from the command
+line or from Python.
 
 I am not affiliated with the Everdo project and this is not _the_ official library or CL tool. I just needed one.
 
 ## Features
 
 - **Safe local queries**: opens the database in SQLite read-only mode; local queries never modify your data
-- **Inbox capture**: create an Everdo inbox item through the API with a title, optional note, and optional focus flag
+- **Inbox capture**: create an Everdo inbox item through the official API with a title, optional note, and optional focus flag
 - **GTD views**: inbox, next actions, projects, waiting, scheduled, someday/maybe, focused
 - **Project drill-down**: view a project's detail and its open/completed tasks
 - **Cross-project task lists**: merge the tasks of several projects (archived ones included), with optional dedup
@@ -274,7 +274,7 @@ $ python3 -m everdo done --project renovation -n 10
 
 ### Adding Inbox Items through the Everdo API
 
-Enable the API in Everdo under **Settings -> API**, then restart Everdo. The default API URL is
+Enable the API in Everdo under **Settings -> API**, apply the settings, then restart Everdo. The default API URL is
 `https://localhost:11111`.
 
 `inbox-add` requires an API key. Supply it with `--api-key` or the `EVERDO_API_KEY` environment variable; the
@@ -417,8 +417,9 @@ All tests should pass. The fixture database is created fresh by `tests/conftest.
 Everdo stores its data in a SQLite database at `%APPDATA%\Everdo\db` on Windows. The local query path opens that
 database in read-only mode (`?mode=ro` URI parameter), queries items, projects, tags, and their relationships, and
 presents them through either the CLI or the Python API; it does not write to the database. The `inbox-add` path is
-separate and does not open SQLite: it sends a JSON `POST` request to `/api/items/` with the API key and requested
-fields, then validates the returned item ID and creation time. Both paths use only Python's standard library,
+separate and does not open SQLite: it sends a JSON `POST` request to Everdo's documented `/api/items/` endpoint with
+the API key and requested fields, then validates the returned item ID and creation time. `inbox-add` is the sole write
+operation. Both paths use only Python's standard library,
 including `sqlite3` for local queries and `urllib`/`json` for the API request. IDs are stored as 16-byte BLOBs in
 SQLite and exposed as 32-character hex strings. Timestamps are stored as seconds since epoch and converted to UTC
 `datetime` objects.
