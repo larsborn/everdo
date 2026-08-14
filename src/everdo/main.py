@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sqlite3
 import sys
 
+from everdo.api import DEFAULT_API_URL, EverdoAPI, EverdoAPIError
 from everdo.db import EverdoDB, default_db_path
 from everdo.formatting import (
     print_item_detail,
@@ -37,6 +39,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     inbox_p = sub.add_parser("inbox", help="Show unprocessed inbox items")
     _add_list_flags(inbox_p, project=False)
+
+    inbox_add_p = sub.add_parser("inbox-add", help="Create an inbox item through the Everdo API")
+    inbox_add_p.add_argument("title", help="Title of the new inbox item")
+    inbox_add_p.add_argument("--note", default=None, help="Optional note for the new item")
+    inbox_add_p.add_argument("--focused", action="store_true", help="Mark the new item as focused")
+    inbox_add_p.add_argument("--api-url", default=None, help="Everdo API URL")
+    inbox_add_p.add_argument("--api-key", default=None, help="Everdo API key")
 
     next_p = sub.add_parser("next", help="Active next actions")
     next_p.add_argument("--project", default=None, help="Filter by project ID prefix or name")
@@ -161,6 +170,21 @@ def main(argv: list[str] | None = None) -> None:
     if not args.command:
         parser.print_help()
         sys.exit(1)
+
+    if args.command == "inbox-add":
+        api_url = args.api_url or os.environ.get("EVERDO_API_URL") or DEFAULT_API_URL
+        api_key = args.api_key or os.environ.get("EVERDO_API_KEY")
+        if not api_key:
+            print("Cannot create inbox item: API key is required", file=sys.stderr)
+            sys.exit(1)
+        api = EverdoAPI(api_url, api_key)
+        try:
+            item = api.create_inbox_item(args.title, note=args.note, is_focused=args.focused)
+        except EverdoAPIError as exc:
+            print(f"Cannot create inbox item: {exc}", file=sys.stderr)
+            sys.exit(1)
+        print(f"{item.id}\t{item.created_on.strftime('%Y-%m-%d %H:%M:%S UTC')}")
+        return 0
 
     try:
         db = EverdoDB(args.db)
