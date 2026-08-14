@@ -39,7 +39,7 @@ class CLITestCase(unittest.TestCase):
 
 class TestListCommands(CLITestCase):
     def test_top_level_help_describes_database_and_api_inbox_capture(self):
-        code, out, _ = self.run_cli("--help", db=False)
+        code, out, _ = self.run_cli("-h", db=False)
         self.assertEqual(code, 0)
         self.assertIn("CLI for Everdo GTD database and API inbox capture", out)
 

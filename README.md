@@ -277,7 +277,8 @@ $ python3 -m everdo done --project renovation -n 10
 Enable the API in Everdo under **Settings -> API**, apply the settings, then restart Everdo. The default API URL is
 `https://localhost:11111`.
 
-`inbox-add` requires an API key. The examples below assume `EVERDO_API_KEY` is configured in the environment.
+`inbox-add` requires an API key. The examples below assume `EVERDO_API_KEY` is configured in the environment;
+`EVERDO_API_URL` is optional and defaults to `https://localhost:11111`.
 
 ```bash
 python3 -m everdo inbox-add "Call the dentist"
@@ -285,7 +286,7 @@ python3 -m everdo inbox-add "Plan weekend trip" --note "Check trains and hotels"
 python3 -m everdo inbox-add "Review proposal" --focused
 ```
 
-You can keep both settings in the environment and omit them from the command line:
+To use a non-default API URL, configure it in the environment as well:
 
 ```bash
 export EVERDO_API_URL=https://localhost:11111
@@ -300,9 +301,9 @@ The command accepts a required title and these optional flags:
 - `--api-url URL`: override `EVERDO_API_URL` and the default URL
 - `--api-key KEY`: override `EVERDO_API_KEY` (required if the environment variable is unset)
 
-Everdo requires the API key as a query parameter on the API request. The URL precedence is `--api-url`, then
-`EVERDO_API_URL`, then the default; the key precedence is `--api-key`, then `EVERDO_API_KEY`. Prefer
-`EVERDO_API_KEY` over `--api-key` so the key is not exposed in command-line history.
+The URL precedence is `--api-url`, then `EVERDO_API_URL`, then the default; the key precedence is `--api-key`, then
+`EVERDO_API_KEY`. Everdo requires the API key as a query parameter on the API request. Prefer the environment
+variable: command-line keys may appear in shell history and process lists.
 
 Requests use a fixed 30-second timeout. Everdo's local HTTPS endpoint commonly uses a self-signed certificate, so
 certificate verification is intentionally disabled for this command. Use it only with a trusted Everdo instance and
