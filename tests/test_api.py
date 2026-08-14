@@ -87,6 +87,13 @@ class TestEverdoAPIErrors(unittest.TestCase):
             EverdoAPI("https://localhost:11111", "secret").create_inbox_item("Title")
 
     @patch("everdo.api.request.urlopen")
+    def test_direct_timeout_has_fixed_message(self, urlopen):
+        urlopen.side_effect = socket.timeout()
+
+        with self.assertRaisesRegex(EverdoAPIError, "Everdo API timed out after 30 seconds"):
+            EverdoAPI("https://localhost:11111", "secret").create_inbox_item("Title")
+
+    @patch("everdo.api.request.urlopen")
     def test_http_error_includes_status_and_reason_without_url_or_key(self, urlopen):
         urlopen.side_effect = HTTPError(
             "https://localhost:11111/api/items/?key=secret-key", 401, "Unauthorized", {}, None
@@ -105,12 +112,28 @@ class TestEverdoAPIErrors(unittest.TestCase):
             EverdoAPI("https://localhost:11111", "secret").create_inbox_item("Title")
 
     @patch("everdo.api.request.urlopen")
+    def test_invalid_utf8_is_rejected_as_invalid_json(self, urlopen):
+        urlopen.return_value = self.response(b"\xff")
+
+        with self.assertRaisesRegex(EverdoAPIError, "Everdo API returned invalid JSON"):
+            EverdoAPI("https://localhost:11111", "secret").create_inbox_item("Title")
+
+    @patch("everdo.api.request.urlopen")
     def test_invalid_response_payloads_are_rejected(self, urlopen):
         for payload in ({}, {"id": "ABCD"}, {"id": 123, "createdOn": 1700000000}, {"id": "ABCD", "createdOn": "1700000000"}):
             with self.subTest(payload=payload):
                 urlopen.return_value = self.response(json.dumps(payload).encode("utf-8"))
                 with self.assertRaisesRegex(EverdoAPIError, "Everdo API returned an invalid response"):
                     EverdoAPI("https://localhost:11111", "secret").create_inbox_item("Title")
+
+    @patch("everdo.api.request.urlopen")
+    def test_timestamp_conversion_failure_is_rejected_as_invalid_response(self, urlopen):
+        urlopen.return_value = self.response(json.dumps({"id": "ABCD", "createdOn": 1700000000}).encode("utf-8"))
+
+        with patch("everdo.api.datetime") as datetime_class:
+            datetime_class.fromtimestamp.side_effect = OverflowError
+            with self.assertRaisesRegex(EverdoAPIError, "Everdo API returned an invalid response"):
+                EverdoAPI("https://localhost:11111", "secret").create_inbox_item("Title")
 
 
 if __name__ == "__main__":
