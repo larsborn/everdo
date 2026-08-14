@@ -277,15 +277,12 @@ $ python3 -m everdo done --project renovation -n 10
 Enable the API in Everdo under **Settings -> API**, apply the settings, then restart Everdo. The default API URL is
 `https://localhost:11111`.
 
-`inbox-add` requires an API key. Supply it with `--api-key` or the `EVERDO_API_KEY` environment variable; the
-command-line flag takes precedence. Likewise, `--api-url` overrides `EVERDO_API_URL`, which overrides the default
-URL. Environment variables are preferable for the key because command-line arguments can be retained in shell
-history.
+`inbox-add` requires an API key. The examples below assume `EVERDO_API_KEY` is configured in the environment.
 
 ```bash
-python3 -m everdo inbox-add "Call the dentist" --api-key "$EVERDO_API_KEY"
-python3 -m everdo inbox-add "Plan weekend trip" --note "Check trains and hotels" --api-key "$EVERDO_API_KEY"
-python3 -m everdo inbox-add "Review proposal" --focused --api-key "$EVERDO_API_KEY"
+python3 -m everdo inbox-add "Call the dentist"
+python3 -m everdo inbox-add "Plan weekend trip" --note "Check trains and hotels"
+python3 -m everdo inbox-add "Review proposal" --focused
 ```
 
 You can keep both settings in the environment and omit them from the command line:
@@ -303,9 +300,9 @@ The command accepts a required title and these optional flags:
 - `--api-url URL`: override `EVERDO_API_URL` and the default URL
 - `--api-key KEY`: override `EVERDO_API_KEY` (required if the environment variable is unset)
 
-Everdo requires the API key as a query parameter on the API request. Prefer `EVERDO_API_KEY` over `--api-key` so
-the key is not exposed in command-line history. The URL precedence is `--api-url`, then `EVERDO_API_URL`, then the
-default; the key precedence is `--api-key`, then `EVERDO_API_KEY`.
+Everdo requires the API key as a query parameter on the API request. The URL precedence is `--api-url`, then
+`EVERDO_API_URL`, then the default; the key precedence is `--api-key`, then `EVERDO_API_KEY`. Prefer
+`EVERDO_API_KEY` over `--api-key` so the key is not exposed in command-line history.
 
 Requests use a fixed 30-second timeout. Everdo's local HTTPS endpoint commonly uses a self-signed certificate, so
 certificate verification is intentionally disabled for this command. Use it only with a trusted Everdo instance and

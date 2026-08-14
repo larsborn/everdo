@@ -21,7 +21,10 @@ from everdo.model import ItemType, ListType, TagType
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="everdo", description="Read-only CLI for Everdo GTD database")
+    parser = argparse.ArgumentParser(
+        prog="everdo",
+        description="CLI for Everdo GTD database and API inbox capture",
+    )
     parser.add_argument(
         "--db",
         default=None,
