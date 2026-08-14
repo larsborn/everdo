@@ -286,7 +286,8 @@ python3 -m everdo inbox-add "Plan weekend trip" --note "Check trains and hotels"
 python3 -m everdo inbox-add "Review proposal" --focused
 ```
 
-To use a non-default API URL, configure it in the environment as well:
+To keep both settings in the environment instead of passing flags each time — the example shows the default URL —
+export them once for your shell session:
 
 ```bash
 export EVERDO_API_URL=https://localhost:11111
@@ -298,12 +299,12 @@ The command accepts a required title and these optional flags:
 
 - `--note TEXT`: add a note to the new inbox item
 - `--focused`: mark the item as focused
-- `--api-url URL`: override `EVERDO_API_URL` and the default URL
-- `--api-key KEY`: override `EVERDO_API_KEY` (required if the environment variable is unset)
+- `--api-url URL`: override the API URL; precedence is `--api-url`, then `EVERDO_API_URL`, then the default
+- `--api-key KEY`: override the API key (required if the environment variable is unset); precedence is `--api-key`,
+  then `EVERDO_API_KEY`
 
-The URL precedence is `--api-url`, then `EVERDO_API_URL`, then the default; the key precedence is `--api-key`, then
-`EVERDO_API_KEY`. Everdo requires the API key as a query parameter on the API request. Prefer the environment
-variable: command-line keys may appear in shell history and process lists.
+Everdo requires the API key as a query parameter on the API request. Prefer the environment variable: command-line
+keys may appear in shell history and process lists.
 
 Requests use a fixed 30-second timeout. Everdo's local HTTPS endpoint commonly uses a self-signed certificate, so
 certificate verification is intentionally disabled for this command. Use it only with a trusted Everdo instance and
