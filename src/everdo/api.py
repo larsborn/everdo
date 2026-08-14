@@ -3,13 +3,19 @@
 from __future__ import annotations
 
 import json
+import socket
 import ssl
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from urllib import parse, request
+from urllib.error import HTTPError, URLError
 
 DEFAULT_API_URL = "https://localhost:11111"
 API_TIMEOUT_SECONDS = 30
+
+
+class EverdoAPIError(Exception):
+    """Raised when the Everdo API cannot complete an expected operation."""
 
 
 @dataclass(frozen=True)
@@ -44,9 +50,30 @@ class EverdoAPI:
             method="POST",
         )
         context = ssl._create_unverified_context()
-        with request.urlopen(req, timeout=API_TIMEOUT_SECONDS, context=context) as response:
-            response_data = json.loads(response.read().decode("utf-8"))
-        return CreatedInboxItem(
-            id=response_data["id"],
-            created_on=datetime.fromtimestamp(response_data["createdOn"], tz=timezone.utc),
-        )
+        if not title.strip():
+            raise EverdoAPIError("Title must not be empty")
+
+        try:
+            with request.urlopen(req, timeout=API_TIMEOUT_SECONDS, context=context) as response:
+                response_data = json.loads(response.read().decode("utf-8"))
+        except HTTPError as error:
+            raise EverdoAPIError(f"Everdo API returned HTTP {error.code}: {error.reason}") from None
+        except (socket.timeout, TimeoutError):
+            raise EverdoAPIError("Everdo API timed out after 30 seconds") from None
+        except URLError as error:
+            if isinstance(error.reason, (socket.timeout, TimeoutError)):
+                raise EverdoAPIError("Everdo API timed out after 30 seconds") from None
+            raise EverdoAPIError("Cannot connect to Everdo API") from None
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            raise EverdoAPIError("Everdo API returned invalid JSON") from None
+
+        try:
+            item_id = response_data["id"]
+            created_timestamp = response_data["createdOn"]
+            if not isinstance(item_id, str) or not isinstance(created_timestamp, (int, float)):
+                raise TypeError
+            created_on = datetime.fromtimestamp(created_timestamp, tz=timezone.utc)
+        except (KeyError, IndexError, TypeError, ValueError, OverflowError, OSError):
+            raise EverdoAPIError("Everdo API returned an invalid response") from None
+
+        return CreatedInboxItem(id=item_id, created_on=created_on)

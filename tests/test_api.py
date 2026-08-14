@@ -1,12 +1,14 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import json
+import socket
 import ssl
 import unittest
+from urllib.error import HTTPError, URLError
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
-from everdo.api import EverdoAPI
+from everdo.api import EverdoAPI, EverdoAPIError
 
 
 class TestEverdoAPISuccess(unittest.TestCase):
@@ -55,6 +57,60 @@ class TestEverdoAPISuccess(unittest.TestCase):
 
         request_obj = urlopen.call_args.args[0]
         self.assertEqual(json.loads(request_obj.data.decode("utf-8")), {"title": "Title"})
+
+
+class TestEverdoAPIErrors(unittest.TestCase):
+    def response(self, body):
+        response = MagicMock()
+        response.__enter__.return_value.read.return_value = body
+        return response
+
+    @patch("everdo.api.request.urlopen")
+    def test_rejects_whitespace_only_title_without_network_access(self, urlopen):
+        with self.assertRaisesRegex(EverdoAPIError, "Title must not be empty"):
+            EverdoAPI("https://localhost:11111", "secret").create_inbox_item(" \t\n")
+        urlopen.assert_not_called()
+
+    @patch("everdo.api.request.urlopen")
+    def test_connection_error_does_not_leak_api_key(self, urlopen):
+        urlopen.side_effect = URLError("connection refused")
+
+        with self.assertRaisesRegex(EverdoAPIError, "Cannot connect to Everdo API") as caught:
+            EverdoAPI("https://localhost:11111", "secret-key").create_inbox_item("Title")
+        self.assertNotIn("secret-key", str(caught.exception))
+
+    @patch("everdo.api.request.urlopen")
+    def test_wrapped_timeout_has_fixed_message(self, urlopen):
+        urlopen.side_effect = URLError(socket.timeout("timed out"))
+
+        with self.assertRaisesRegex(EverdoAPIError, "Everdo API timed out after 30 seconds"):
+            EverdoAPI("https://localhost:11111", "secret").create_inbox_item("Title")
+
+    @patch("everdo.api.request.urlopen")
+    def test_http_error_includes_status_and_reason_without_url_or_key(self, urlopen):
+        urlopen.side_effect = HTTPError(
+            "https://localhost:11111/api/items/?key=secret-key", 401, "Unauthorized", {}, None
+        )
+
+        with self.assertRaisesRegex(EverdoAPIError, "Everdo API returned HTTP 401: Unauthorized") as caught:
+            EverdoAPI("https://localhost:11111", "secret-key").create_inbox_item("Title")
+        self.assertNotIn("https://", str(caught.exception))
+        self.assertNotIn("secret-key", str(caught.exception))
+
+    @patch("everdo.api.request.urlopen")
+    def test_malformed_json_is_rejected(self, urlopen):
+        urlopen.return_value = self.response(b"not json")
+
+        with self.assertRaisesRegex(EverdoAPIError, "Everdo API returned invalid JSON"):
+            EverdoAPI("https://localhost:11111", "secret").create_inbox_item("Title")
+
+    @patch("everdo.api.request.urlopen")
+    def test_invalid_response_payloads_are_rejected(self, urlopen):
+        for payload in ({}, {"id": "ABCD"}, {"id": 123, "createdOn": 1700000000}, {"id": "ABCD", "createdOn": "1700000000"}):
+            with self.subTest(payload=payload):
+                urlopen.return_value = self.response(json.dumps(payload).encode("utf-8"))
+                with self.assertRaisesRegex(EverdoAPIError, "Everdo API returned an invalid response"):
+                    EverdoAPI("https://localhost:11111", "secret").create_inbox_item("Title")
 
 
 if __name__ == "__main__":
