@@ -72,6 +72,13 @@ class TestEverdoAPIErrors(unittest.TestCase):
         urlopen.assert_not_called()
 
     @patch("everdo.api.request.urlopen")
+    def test_rejects_malformed_api_url_without_leaking_key_or_network_access(self, urlopen):
+        with self.assertRaisesRegex(EverdoAPIError, "Invalid Everdo API URL") as caught:
+            EverdoAPI("not-a-url", "TOP-SECRET").create_inbox_item("Title")
+        self.assertNotIn("TOP-SECRET", str(caught.exception))
+        urlopen.assert_not_called()
+
+    @patch("everdo.api.request.urlopen")
     def test_connection_error_does_not_leak_api_key(self, urlopen):
         urlopen.side_effect = URLError("connection refused")
 

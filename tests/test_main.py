@@ -431,6 +431,18 @@ class TestInboxAddCommand(unittest.TestCase):
         self.assertEqual(out, "")
         self.assertEqual(err, "Cannot create inbox item: Cannot connect to Everdo API\n")
 
+    def test_malformed_api_url_is_reported_without_secret_or_traceback(self):
+        with patch("everdo.api.request.urlopen") as urlopen:
+            code, out, err = self.run_cli(
+                "inbox-add", "Title", "--api-url", "not-a-url", "--api-key", "TOP-SECRET"
+            )
+        self.assertEqual(code, 1)
+        self.assertEqual(out, "")
+        self.assertTrue(err.startswith("Cannot create inbox item:"))
+        self.assertNotIn("TOP-SECRET", err)
+        self.assertNotIn("Traceback", err)
+        urlopen.assert_not_called()
+
     def test_success_returns_zero_and_prints_id_and_created_on(self):
         created = CreatedInboxItem("abc", datetime(2026, 8, 14, 12, 34, 56, tzinfo=timezone.utc))
         with patch("everdo.main.EverdoAPI") as api_cls:

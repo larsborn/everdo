@@ -43,17 +43,21 @@ class EverdoAPI:
             payload["isFocused"] = True
 
         query = parse.urlencode({"key": self._api_key})
-        req = request.Request(
-            f"{self._base_url}/api/items/?{query}",
-            data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
+        request_data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         context = ssl._create_unverified_context()
         if not title.strip():
             raise EverdoAPIError("Title must not be empty")
 
         try:
+            try:
+                req = request.Request(
+                    f"{self._base_url}/api/items/?{query}",
+                    data=request_data,
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+            except ValueError:
+                raise EverdoAPIError("Invalid Everdo API URL") from None
             with request.urlopen(req, timeout=API_TIMEOUT_SECONDS, context=context) as response:
                 response_data = json.loads(response.read().decode("utf-8"))
         except HTTPError as error:
