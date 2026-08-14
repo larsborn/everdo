@@ -5,7 +5,7 @@ import os
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, patch
 
 from everdo.api import CreatedInboxItem, EverdoAPIError
@@ -365,6 +365,43 @@ class TestInboxAddCommand(unittest.TestCase):
         self.assertEqual(code, 0)
         api_cls.assert_called_once_with("env-url", "env-key")
 
+    def test_explicit_empty_api_key_does_not_fall_back_to_environment(self):
+        with patch.dict(os.environ, {"EVERDO_API_KEY": "env-key"}), patch("everdo.main.EverdoAPI") as api_cls:
+            code, out, err = self.run_cli("inbox-add", "Title", "--api-key", "")
+        self.assertEqual(code, 1)
+        self.assertEqual(out, "")
+        self.assertIn("API key", err)
+        api_cls.assert_not_called()
+
+    def test_explicit_empty_api_url_does_not_fall_back_to_environment(self):
+        with patch.dict(os.environ, {"EVERDO_API_URL": "env-url", "EVERDO_API_KEY": "env-key"}), patch(
+            "everdo.main.EverdoAPI"
+        ) as api_cls:
+            code, out, err = self.run_cli("inbox-add", "Title", "--api-url", "")
+        self.assertEqual(code, 1)
+        self.assertEqual(out, "")
+        self.assertEqual(err, "Cannot create inbox item: API URL must not be empty\n")
+        api_cls.assert_not_called()
+
+    def test_empty_environment_api_key_is_missing(self):
+        with patch.dict(os.environ, {"EVERDO_API_KEY": ""}), patch("everdo.main.EverdoAPI") as api_cls:
+            code, out, err = self.run_cli("inbox-add", "Title")
+        self.assertEqual(code, 1)
+        self.assertEqual(out, "")
+        self.assertIn("API key", err)
+        api_cls.assert_not_called()
+
+    def test_empty_environment_api_url_uses_default(self):
+        with patch.dict(os.environ, {"EVERDO_API_URL": "", "EVERDO_API_KEY": "env-key"}), patch(
+            "everdo.main.EverdoAPI"
+        ) as api_cls:
+            api_cls.return_value.create_inbox_item.return_value = Mock(
+                id="abc", created_on=datetime(2026, 1, 1, tzinfo=timezone.utc)
+            )
+            code, _, _ = self.run_cli("inbox-add", "Title")
+        self.assertEqual(code, 0)
+        api_cls.assert_called_once_with("https://localhost:11111", "env-key")
+
     def test_missing_key_errors_before_client_creation(self):
         with patch.dict(os.environ, {}, clear=True), patch("everdo.main.EverdoAPI") as api_cls:
             code, out, err = self.run_cli("inbox-add", "Title")
@@ -393,6 +430,16 @@ class TestInboxAddCommand(unittest.TestCase):
         created = CreatedInboxItem("abc", datetime(2026, 8, 14, 12, 34, 56, tzinfo=timezone.utc))
         with patch("everdo.main.EverdoAPI") as api_cls:
             api_cls.return_value.create_inbox_item.return_value = created
+            code, out, err = self.run_cli("inbox-add", "Title", "--api-key", "key")
+        self.assertEqual(code, 0)
+        self.assertEqual(err, "")
+        self.assertEqual(out, "abc\t2026-08-14 12:34:56 UTC\n")
+
+    def test_success_converts_created_on_to_utc(self):
+        with patch("everdo.main.EverdoAPI") as api_cls:
+            api_cls.return_value.create_inbox_item.return_value = CreatedInboxItem(
+                "abc", datetime(2026, 8, 14, 14, 34, 56, tzinfo=timezone(timedelta(hours=2)))
+            )
             code, out, err = self.run_cli("inbox-add", "Title", "--api-key", "key")
         self.assertEqual(code, 0)
         self.assertEqual(err, "")

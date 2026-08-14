@@ -6,6 +6,7 @@ import argparse
 import os
 import sqlite3
 import sys
+from datetime import timezone
 
 from everdo.api import DEFAULT_API_URL, EverdoAPI, EverdoAPIError
 from everdo.db import EverdoDB, default_db_path
@@ -172,8 +173,11 @@ def main(argv: list[str] | None = None) -> None:
         sys.exit(1)
 
     if args.command == "inbox-add":
-        api_url = args.api_url or os.environ.get("EVERDO_API_URL") or DEFAULT_API_URL
-        api_key = args.api_key or os.environ.get("EVERDO_API_KEY")
+        if args.api_url == "":
+            print("Cannot create inbox item: API URL must not be empty", file=sys.stderr)
+            sys.exit(1)
+        api_url = args.api_url if args.api_url is not None else os.environ.get("EVERDO_API_URL") or DEFAULT_API_URL
+        api_key = args.api_key if args.api_key is not None else os.environ.get("EVERDO_API_KEY")
         if not api_key:
             print("Cannot create inbox item: API key is required", file=sys.stderr)
             sys.exit(1)
@@ -183,7 +187,8 @@ def main(argv: list[str] | None = None) -> None:
         except EverdoAPIError as exc:
             print(f"Cannot create inbox item: {exc}", file=sys.stderr)
             sys.exit(1)
-        print(f"{item.id}\t{item.created_on.strftime('%Y-%m-%d %H:%M:%S UTC')}")
+        created_on = item.created_on.astimezone(timezone.utc)
+        print(f"{item.id}\t{created_on.strftime('%Y-%m-%d %H:%M:%S UTC')}")
         return 0
 
     try:
