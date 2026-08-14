@@ -4,6 +4,7 @@ import json
 import socket
 import ssl
 import unittest
+from http.client import InvalidURL
 from urllib.error import HTTPError, URLError
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
@@ -85,6 +86,14 @@ class TestEverdoAPIErrors(unittest.TestCase):
         with self.assertRaisesRegex(EverdoAPIError, "Cannot connect to Everdo API") as caught:
             EverdoAPI("https://localhost:11111", "secret-key").create_inbox_item("Title")
         self.assertNotIn("secret-key", str(caught.exception))
+
+    @patch("everdo.api.request.urlopen")
+    def test_deferred_invalid_url_does_not_leak_api_key(self, urlopen):
+        urlopen.side_effect = InvalidURL("nonnumeric port in TOP-SECRET URL")
+
+        with self.assertRaisesRegex(EverdoAPIError, "Invalid Everdo API URL") as caught:
+            EverdoAPI("https://localhost:notaport", "TOP-SECRET").create_inbox_item("Title")
+        self.assertNotIn("TOP-SECRET", str(caught.exception))
 
     @patch("everdo.api.request.urlopen")
     def test_wrapped_timeout_has_fixed_message(self, urlopen):

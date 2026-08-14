@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from datetime import datetime, timedelta, timezone
+from http.client import InvalidURL
 from unittest.mock import Mock, patch
 
 from everdo.api import CreatedInboxItem, EverdoAPIError
@@ -442,6 +443,18 @@ class TestInboxAddCommand(unittest.TestCase):
         self.assertNotIn("TOP-SECRET", err)
         self.assertNotIn("Traceback", err)
         urlopen.assert_not_called()
+
+    def test_deferred_invalid_api_url_is_reported_without_network_or_secret(self):
+        with patch("everdo.api.request.urlopen", side_effect=InvalidURL("TOP-SECRET invalid port")) as urlopen:
+            code, out, err = self.run_cli(
+                "inbox-add", "Title", "--api-url", "https://localhost:notaport", "--api-key", "TOP-SECRET"
+            )
+        self.assertEqual(code, 1)
+        self.assertEqual(out, "")
+        self.assertEqual(err, "Cannot create inbox item: Invalid Everdo API URL\n")
+        self.assertNotIn("TOP-SECRET", err)
+        self.assertNotIn("Traceback", err)
+        urlopen.assert_called_once()
 
     def test_success_returns_zero_and_prints_id_and_created_on(self):
         created = CreatedInboxItem("abc", datetime(2026, 8, 14, 12, 34, 56, tzinfo=timezone.utc))

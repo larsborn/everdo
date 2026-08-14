@@ -7,6 +7,7 @@ import socket
 import ssl
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from http.client import InvalidURL
 from urllib import parse, request
 from urllib.error import HTTPError, URLError
 
@@ -62,6 +63,8 @@ class EverdoAPI:
                 response_data = json.loads(response.read().decode("utf-8"))
         except HTTPError as error:
             raise EverdoAPIError(f"Everdo API returned HTTP {error.code}") from None
+        except InvalidURL:
+            raise EverdoAPIError("Invalid Everdo API URL") from None
         except (socket.timeout, TimeoutError):
             raise EverdoAPIError("Everdo API timed out after 30 seconds") from None
         except URLError as error:
