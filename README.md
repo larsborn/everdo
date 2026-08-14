@@ -1,13 +1,15 @@
 # Everdo Library / Command Line Interface
 
-A read-only zero-dependency Python interface to the [Everdo](https://everdo.net/) GTD database. Query your actions,
-projects, and tags from the command line or from Python.
+A zero-dependency Python interface to the [Everdo](https://everdo.net/) GTD database: run read-only local queries,
+or create inbox items through Everdo's API. Query your actions, projects, and tags from the command line or from
+Python.
 
 I am not affiliated with the Everdo project and this is not _the_ official library or CL tool. I just needed one.
 
 ## Features
 
-- **Read-only & safe**: opens the database in SQLite read-only mode; your data is never modified
+- **Safe local queries**: opens the database in SQLite read-only mode; local queries never modify your data
+- **Inbox capture**: create an Everdo inbox item through the API with a title, optional note, and optional focus flag
 - **GTD views**: inbox, next actions, projects, waiting, scheduled, someday/maybe, focused
 - **Project drill-down**: view a project's detail and its open/completed tasks
 - **Cross-project task lists**: merge the tasks of several projects (archived ones included), with optional dedup
@@ -31,21 +33,22 @@ export PYTHONPATH=src  # or SET under Windows
 Then run with:
 
 ```bash
-python -m everdo <command>
+python3 -m everdo <command>
 ```
 
 ## CLI Usage
 
 ```
 usage: everdo [-h] [--db DB]
-              {inbox,next,done,projects,project,tasks,waiting,scheduled,
-               someday,focused,notebooks,notes,tags,show,search} ...
+               {inbox,inbox-add,next,done,projects,project,tasks,waiting,scheduled,
+                someday,focused,notebooks,notes,tags,show,search} ...
 
-Read-only CLI for Everdo GTD database
+CLI for Everdo GTD database and API inbox capture
 
 positional arguments:
-  {inbox,next,done,...}
+  {inbox,inbox-add,next,done,...}
     inbox               Show unprocessed inbox items
+    inbox-add           Create an inbox item through the Everdo API
     next                Active next actions
     done                Completed tasks
     projects            List active projects with task counts
@@ -69,7 +72,7 @@ options:
 ### Inbox
 
 ```
-$ python -m everdo inbox
+$ python3 -m everdo inbox
 
 Inbox
 -----
@@ -83,7 +86,7 @@ e5f6a7b8   Read article on time management
 ### Projects
 
 ```
-$ python -m everdo projects
+$ python3 -m everdo projects
 
 ID         Project                             Created     Open  Done
 ----------------------------------------------------------------------
@@ -96,16 +99,16 @@ Output is sorted by creation date, newest first. `--sort {created,title,open,don
 another column (`title` sorts ascending, the rest descending) and `--reverse` flips the order:
 
 ```
-$ python -m everdo projects --sort title
-$ python -m everdo projects --sort open --reverse
+$ python3 -m everdo projects --sort title
+$ python3 -m everdo projects --sort open --reverse
 ```
 
 By default only open, active projects are shown. Use `--list` to see other lists — including
 completed projects — e.g. archived ones, or `all` for every project:
 
 ```
-$ python -m everdo projects --list archived
-$ python -m everdo projects --list all
+$ python3 -m everdo projects --list archived
+$ python3 -m everdo projects --list all
 ```
 
 (Choices: `all`, `inbox`, `active`, `scheduled`, `waiting`, `someday`, `deleted`, `archived`.)
@@ -114,7 +117,7 @@ $ python -m everdo projects --list all
 which pairs well with `--list all` to find past years' projects:
 
 ```
-$ python -m everdo projects --list all --filter Packliste
+$ python3 -m everdo projects --list all --filter Packliste
 ```
 
 ### Tasks across projects
@@ -124,8 +127,8 @@ included. Each argument is an ID prefix or name substring, and *every* matching 
 included, so a single query like `Trip` can cover all years at once:
 
 ```
-$ python -m everdo tasks "Trip 2024" "Trip 2025"
-$ python -m everdo tasks Trip -t -p
+$ python3 -m everdo tasks "Trip 2024" "Trip 2025"
+$ python3 -m everdo tasks Trip -t -p
 ```
 
 The `-t`/`-p` flags work exactly like in `search`: `-t` prints deduplicated bare titles, and
@@ -135,7 +138,7 @@ into a fresh checklist.
 ### Next Actions
 
 ```
-$ python -m everdo next
+$ python3 -m everdo next
 
 Next Actions
 ------------
@@ -149,8 +152,8 @@ b2c5d8e3   Practice vocabulary flashcards  @learning
 Filter by project (ID prefix or name):
 
 ```
-$ python -m everdo next --project 3f8a
-$ python -m everdo next --project renovation
+$ python3 -m everdo next --project 3f8a
+$ python3 -m everdo next --project renovation
 
 Next Actions
 ------------
@@ -163,7 +166,7 @@ ID         Title                Tags
 ### Show Item Detail
 
 ```
-$ python -m everdo show 7d4e
+$ python3 -m everdo show 7d4e
 
 Title:       Draft budget proposal
 ID:          7d4e9f01a2b3c4d5e6f7a8b9c0d1e2f3
@@ -179,7 +182,7 @@ Tags:        @work @planning
 ### Search
 
 ```
-$ python -m everdo search budget
+$ python3 -m everdo search budget
 
 Search: budget
 --------------
@@ -192,7 +195,7 @@ c4d5e6f7   Review department budget  @work
 Multiple terms are OR-combined, and `-a/--all` includes completed and archived tasks:
 
 ```
-$ python -m everdo search -a budget expenses
+$ python3 -m everdo search -a budget expenses
 
 Search: budget, expenses
 ------------------------
@@ -207,7 +210,7 @@ To rebuild a recurring todo list (e.g. a yearly trip) from everything you did be
 all items — including completed ones — and print deduplicated bare titles with `-t/--titles`:
 
 ```
-$ python -m everdo search -a -t packing sunscreen tent visa > trip-checklist.txt
+$ python3 -m everdo search -a -t packing sunscreen tent visa > trip-checklist.txt
 ```
 
 Titles are deduplicated case-insensitively and alphabetized, one per line, without IDs or
@@ -220,7 +223,7 @@ trip. A leading checkmark means no open instance of that task exists (every matc
 no checkmark means an open task with that title is already on one of your lists:
 
 ```
-$ python -m everdo search -a -t -p packing tent visa
+$ python3 -m everdo search -a -t -p packing tent visa
 
    Task                 Project(s)
 --------------------------------------------
@@ -232,7 +235,7 @@ $ python -m everdo search -a -t -p packing tent visa
 ### Tags
 
 ```
-$ python -m everdo tags --type area
+$ python3 -m everdo tags --type area
 
 Areas
 --------------------
@@ -243,7 +246,7 @@ Areas
 ### Done
 
 ```
-$ python -m everdo done -n 5
+$ python3 -m everdo done -n 5
 
 Done
 ----
@@ -257,7 +260,7 @@ b2c5d8e3   Review chapter 3       @learning
 Filter by project and/or limit results:
 
 ```
-$ python -m everdo done --project renovation -n 10
+$ python3 -m everdo done --project renovation -n 10
 ```
 
 ### Other Commands
@@ -269,12 +272,39 @@ $ python -m everdo done --project renovation -n 10
 - `notebooks`: reference notebooks
 - `notes`: reference notes (use `--notebook <id or name>` to filter)
 
+### Adding Inbox Items through the Everdo API
+
+Enable the API in Everdo under **Settings -> API**, then restart Everdo. The default API URL is
+`https://localhost:11111`.
+
+`inbox-add` requires an API key. Supply it with `--api-key` or the `EVERDO_API_KEY` environment variable; the
+command-line flag takes precedence. Likewise, `--api-url` overrides `EVERDO_API_URL`, which overrides the default
+URL. Environment variables are preferable for the key because command-line arguments can be retained in shell
+history.
+
+```bash
+python3 -m everdo inbox-add "Call the dentist" --api-key "$EVERDO_API_KEY"
+python3 -m everdo inbox-add "Plan weekend trip" --note "Check trains and hotels" --api-key "$EVERDO_API_KEY"
+python3 -m everdo inbox-add "Review proposal" --focused --api-key "$EVERDO_API_KEY"
+```
+
+The command accepts a required title and these optional flags:
+
+- `--note TEXT`: add a note to the new inbox item
+- `--focused`: mark the item as focused
+- `--api-url URL`: override `EVERDO_API_URL` and the default URL
+- `--api-key KEY`: override `EVERDO_API_KEY` (required if the environment variable is unset)
+
+Requests use a fixed 30-second timeout. Everdo's local HTTPS endpoint commonly uses a self-signed certificate, so
+certificate verification is intentionally disabled for this command. Use it only with a trusted Everdo instance and
+trusted local network. On success, the command prints the created item ID and its UTC creation time.
+
 ### Global Options
 
 Use `--db PATH` to point at a different database file:
 
 ```bash
-python -m everdo --db /path/to/other/db inbox
+python3 -m everdo --db /path/to/other/db inbox
 ```
 
 ## Python Library Usage
@@ -372,7 +402,10 @@ All tests should pass. The fixture database is created fresh by `tests/conftest.
 
 ## How It Works
 
-Everdo stores its data in a SQLite database at `%APPDATA%\Everdo\db` on Windows. This tool opens that database in
-read-only mode (`?mode=ro` URI parameter), queries items, projects, tags, and their relationships, and presents them
-through either the CLI or the Python API. IDs are stored as 16-byte BLOBs in SQLite and exposed as 32-character hex
-strings. Timestamps are stored as seconds since epoch and converted to UTC `datetime` objects.
+Everdo stores its data in a SQLite database at `%APPDATA%\Everdo\db` on Windows. The local query path opens that
+database in read-only mode (`?mode=ro` URI parameter), queries items, projects, tags, and their relationships, and
+presents them through either the CLI or the Python API; it does not write to the database. The `inbox-add` path is
+separate: it sends a JSON `POST` request to `/api/items/` with the API key and requested fields, then validates the
+returned item ID and creation time. Both paths use only Python's standard library, including `sqlite3` for local
+queries and `urllib`/`json` for the API request. IDs are stored as 16-byte BLOBs in SQLite and exposed as 32-character
+hex strings. Timestamps are stored as seconds since epoch and converted to UTC `datetime` objects.
