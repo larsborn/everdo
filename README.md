@@ -214,8 +214,8 @@ $ python3 -m everdo search -a -t packing sunscreen tent visa > trip-checklist.tx
 ```
 
 Titles are deduplicated case-insensitively and alphabetized, one per line, without IDs or
-truncation, so the output is easy to edit and to re-enter in Everdo manually (this tool stays
-read-only by design).
+truncation, so the output is easy to edit and to re-enter in Everdo manually. The local query commands are
+read-only; `inbox-add` is the explicit API write path.
 
 Add `-p` to see which project(s) each task came from — the output becomes an aligned table, and
 duplicates merged across years list all their sources, which highlights the tasks that recur every
@@ -288,12 +288,24 @@ python3 -m everdo inbox-add "Plan weekend trip" --note "Check trains and hotels"
 python3 -m everdo inbox-add "Review proposal" --focused --api-key "$EVERDO_API_KEY"
 ```
 
+You can keep both settings in the environment and omit them from the command line:
+
+```bash
+export EVERDO_API_URL=https://localhost:11111
+export EVERDO_API_KEY=your-api-key
+python3 -m everdo inbox-add "Capture meeting follow-up" --note "Send the recap" --focused
+```
+
 The command accepts a required title and these optional flags:
 
 - `--note TEXT`: add a note to the new inbox item
 - `--focused`: mark the item as focused
 - `--api-url URL`: override `EVERDO_API_URL` and the default URL
 - `--api-key KEY`: override `EVERDO_API_KEY` (required if the environment variable is unset)
+
+Everdo requires the API key as a query parameter on the API request. Prefer `EVERDO_API_KEY` over `--api-key` so
+the key is not exposed in command-line history. The URL precedence is `--api-url`, then `EVERDO_API_URL`, then the
+default; the key precedence is `--api-key`, then `EVERDO_API_KEY`.
 
 Requests use a fixed 30-second timeout. Everdo's local HTTPS endpoint commonly uses a self-signed certificate, so
 certificate verification is intentionally disabled for this command. Use it only with a trusted Everdo instance and
@@ -405,7 +417,8 @@ All tests should pass. The fixture database is created fresh by `tests/conftest.
 Everdo stores its data in a SQLite database at `%APPDATA%\Everdo\db` on Windows. The local query path opens that
 database in read-only mode (`?mode=ro` URI parameter), queries items, projects, tags, and their relationships, and
 presents them through either the CLI or the Python API; it does not write to the database. The `inbox-add` path is
-separate: it sends a JSON `POST` request to `/api/items/` with the API key and requested fields, then validates the
-returned item ID and creation time. Both paths use only Python's standard library, including `sqlite3` for local
-queries and `urllib`/`json` for the API request. IDs are stored as 16-byte BLOBs in SQLite and exposed as 32-character
-hex strings. Timestamps are stored as seconds since epoch and converted to UTC `datetime` objects.
+separate and does not open SQLite: it sends a JSON `POST` request to `/api/items/` with the API key and requested
+fields, then validates the returned item ID and creation time. Both paths use only Python's standard library,
+including `sqlite3` for local queries and `urllib`/`json` for the API request. IDs are stored as 16-byte BLOBs in
+SQLite and exposed as 32-character hex strings. Timestamps are stored as seconds since epoch and converted to UTC
+`datetime` objects.
