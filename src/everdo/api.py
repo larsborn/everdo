@@ -57,7 +57,7 @@ class EverdoAPI:
             with request.urlopen(req, timeout=API_TIMEOUT_SECONDS, context=context) as response:
                 response_data = json.loads(response.read().decode("utf-8"))
         except HTTPError as error:
-            raise EverdoAPIError(f"Everdo API returned HTTP {error.code}: {error.reason}") from None
+            raise EverdoAPIError(f"Everdo API returned HTTP {error.code}") from None
         except (socket.timeout, TimeoutError):
             raise EverdoAPIError("Everdo API timed out after 30 seconds") from None
         except URLError as error:
@@ -70,7 +70,11 @@ class EverdoAPI:
         try:
             item_id = response_data["id"]
             created_timestamp = response_data["createdOn"]
-            if not isinstance(item_id, str) or not isinstance(created_timestamp, (int, float)):
+            if (
+                not isinstance(item_id, str)
+                or not isinstance(created_timestamp, (int, float))
+                or isinstance(created_timestamp, bool)
+            ):
                 raise TypeError
             created_on = datetime.fromtimestamp(created_timestamp, tz=timezone.utc)
         except (KeyError, IndexError, TypeError, ValueError, OverflowError, OSError):

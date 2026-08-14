@@ -96,10 +96,14 @@ class TestEverdoAPIErrors(unittest.TestCase):
     @patch("everdo.api.request.urlopen")
     def test_http_error_includes_status_and_reason_without_url_or_key(self, urlopen):
         urlopen.side_effect = HTTPError(
-            "https://localhost:11111/api/items/?key=secret-key", 401, "Unauthorized", {}, None
+            "https://localhost:11111/api/items/?key=secret-key",
+            401,
+            "Unauthorized https://localhost:11111?key=secret-key",
+            {},
+            None,
         )
 
-        with self.assertRaisesRegex(EverdoAPIError, "Everdo API returned HTTP 401: Unauthorized") as caught:
+        with self.assertRaisesRegex(EverdoAPIError, "Everdo API returned HTTP 401$") as caught:
             EverdoAPI("https://localhost:11111", "secret-key").create_inbox_item("Title")
         self.assertNotIn("https://", str(caught.exception))
         self.assertNotIn("secret-key", str(caught.exception))
@@ -120,7 +124,14 @@ class TestEverdoAPIErrors(unittest.TestCase):
 
     @patch("everdo.api.request.urlopen")
     def test_invalid_response_payloads_are_rejected(self, urlopen):
-        for payload in ({}, {"id": "ABCD"}, {"id": 123, "createdOn": 1700000000}, {"id": "ABCD", "createdOn": "1700000000"}):
+        for payload in (
+            {},
+            {"id": "ABCD"},
+            {"id": 123, "createdOn": 1700000000},
+            {"id": "ABCD", "createdOn": "1700000000"},
+            {"id": "ABCD", "createdOn": True},
+            {"id": "ABCD", "createdOn": False},
+        ):
             with self.subTest(payload=payload):
                 urlopen.return_value = self.response(json.dumps(payload).encode("utf-8"))
                 with self.assertRaisesRegex(EverdoAPIError, "Everdo API returned an invalid response"):
