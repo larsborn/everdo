@@ -5,7 +5,7 @@ from __future__ import annotations
 import shutil
 from datetime import datetime
 
-from everdo.model import Energy, Item, Tag, TagType
+from everdo.model import Energy, Item, ItemType, Tag, TagType
 
 
 def _terminal_width() -> int:
@@ -206,11 +206,20 @@ def print_tags(tags: list[Tag]) -> None:
                 print(f"  {tag.id[:8]}  {tag.title}")
 
 
-def print_item_detail(item: Item) -> None:
+_PARENT_LABELS = {ItemType.PROJECT: "Project:", ItemType.NOTEBOOK: "Notebook:"}
+
+
+def print_item_detail(item: Item, parent: Item | None = None) -> None:
     print(f"\n{'Title:':<12} {_clean(item.title)}")
     print(f"{'ID:':<12} {item.id}")
     print(f"{'Type:':<12} {item.type.name}")
     print(f"{'List:':<12} {item.list_type.name}")
+    if parent is not None:
+        label = _PARENT_LABELS.get(parent.type, "Parent:")
+        print(f"{label:<12} {_clean(parent.title)} ({parent.short_id})")
+    elif item.parent_id:
+        # parent row missing or of an unknown type — the ID is still actionable
+        print(f"{'Parent:':<12} {item.parent_id}")
     if item.is_focused:
         print(f"{'Focused:':<12} yes")
     if item.completed_on:

@@ -6,7 +6,13 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 
 from everdo.main import main
-from tests.conftest import ACTION_ACTIVE_ID, PROJECT_ID, create_test_db
+from tests.conftest import (
+    ACTION_ACTIVE_ID,
+    ARCHIVED_TASK_1_ID,
+    NOTE_1_ID,
+    PROJECT_ID,
+    create_test_db,
+)
 
 
 class CLITestCase(unittest.TestCase):
@@ -251,6 +257,25 @@ class TestTasksCommand(CLITestCase):
         code, out, _ = self.run_cli("show", PROJECT_ID[:8])
         self.assertEqual(code, 0)
         self.assertIn("Test Project", out)
+
+    def test_show_includes_parent_project(self):
+        code, out, _ = self.run_cli("show", ARCHIVED_TASK_1_ID[:8])
+        self.assertEqual(code, 0)
+        self.assertIn("Project:", out)
+        self.assertIn("Old Trip 2024", out)
+        self.assertIn("0d0d0d0d", out)
+
+    def test_show_includes_parent_notebook(self):
+        code, out, _ = self.run_cli("show", NOTE_1_ID[:8])
+        self.assertEqual(code, 0)
+        self.assertIn("Notebook:", out)
+        self.assertIn("My Notebook", out)
+
+    def test_show_without_parent_omits_line(self):
+        code, out, _ = self.run_cli("show", PROJECT_ID[:8])
+        self.assertEqual(code, 0)
+        self.assertNotIn("Project:", out)
+        self.assertNotIn("Parent:", out)
 
     def test_show_non_hex_id_exits_1(self):
         code, _, err = self.run_cli("show", "not-a-hex-id")

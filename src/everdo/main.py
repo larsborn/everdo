@@ -317,7 +317,8 @@ def main(argv: list[str] | None = None) -> None:
             if not item:
                 print(f"Item not found: {args.id}", file=sys.stderr)
                 sys.exit(1)
-            print_item_detail(item)
+            parent = db.get_item(item.parent_id) if item.parent_id else None
+            print_item_detail(item, parent)
 
         elif args.command == "search":
             by_id = {}
